@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package depositsgrpc;
+
+option go_package = "github.com/rvpay/rvpay-go/grpc/go/depositsgrpc";
+
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+
+enum DepositStatus {
+    DEPOSIT_STATUS_UNSPECIFIED = 0;
+    DEPOSIT_STATUS_PENDING = 1;
+    DEPOSIT_STATUS_ACCEPTED = 2;
+    DEPOSIT_STATUS_COMPLETED = 3;
+    DEPOSIT_STATUS_FAILED = 4;
+    DEPOSIT_STATUS_REJECTED = 5;
+
+}
+enum DepositType {
+  DEPOSIT_PORTAL_UNSPECIFIED = 0;
+  DEPOSIT_PORTAL_MMO = 1;
+  DEPOSIT_PORTAL_CARD = 2; // Check to see if CARD is the actual value
+}
+
+enum DepositProvider {
+    DEPOSIT_PROVIDER_UNSPECIFIED = 0;
+    DEPOSIT_PROVIDER_MTN_MOMO_CMR = 1;
+    DEPOSIT_PROVIDER_ORANGE_MOMO_CMR = 2;
+}
+
+message AccountDetails {
+    string phone_number = 1;
+    DepositProvider provider = 2;
+}
+
+message Participant {
+    DepositType type = 1;
+    AccountDetails account_details = 2;
+}
+
+message CreateDepositRequest {
+    string amount = 1;
+    string currency = 2;
+    Participant payer = 3;
+}
+
+message CreateDepositResponse {
+    string deposit_id = 1;
+    DepositStatus status = 2;
+    string next_step = 3;
+}
+
+service DepositsService{
+    rpc InitiateDeposit(CreateDepositRequest) returns (CreateDepositResponse) {
+        option (google.api.http) = {
+            post: "/v1/public/deposits"
+            body: "*"
+        };
+    }
+}

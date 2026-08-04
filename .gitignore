@@ -1,0 +1,2 @@
+# Ignore exactly ".env" anywhere in the repository
+**/.env
