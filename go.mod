@@ -3,6 +3,7 @@ module github.com/I-Frostbyte/rvpay-go
 go 1.26.5
 
 require (
+	github.com/I-Frostbyte/pawapay_client v0.0.0-20260804143201-965ad719e682
 	github.com/ardanlabs/conf/v3 v3.13.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0

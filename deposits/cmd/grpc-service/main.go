@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"github.com/I-Frostbyte/rvpay-go/deposits/db/repo"
+	"github.com/I-Frostbyte/pawapay_client"
 )
 
 func main() {
@@ -81,6 +82,9 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 
 	depositsRepo := repo.NewDepositsRepo(db)
 
+	// Initializing the pawapay client
+	pawapayClient := pawapay_client.NewClient(config.APIURL, config.APIKey)
+
 	svrOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
 			grpc_recovery.UnaryServerInterceptor(),
@@ -90,7 +94,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	grpcServer := grpc.NewServer(svrOpts...)
 	reflection.Register(grpcServer)
 
-	depositsgrpc.RegisterDepositsServiceServer(grpcServer, deposits.NewDepositsService(depositsRepo, logger))
+	depositsgrpc.RegisterDepositsServiceServer(grpcServer, deposits.NewDepositsService(depositsRepo, logger, *pawapayClient))
 	logger.Info().Msg("Successfully registered DepositsServiceServer...")
 
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%v", config.ListenPort))

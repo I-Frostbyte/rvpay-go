@@ -288,6 +288,7 @@ type CreateDepositRequest struct {
 	Amount        string                 `protobuf:"bytes,1,opt,name=amount,proto3" json:"amount,omitempty"`
 	Currency      string                 `protobuf:"bytes,2,opt,name=currency,proto3" json:"currency,omitempty"`
 	Payer         *Participant           `protobuf:"bytes,3,opt,name=payer,proto3" json:"payer,omitempty"`
+	ClientId      string                 `protobuf:"bytes,4,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -341,6 +342,13 @@ func (x *CreateDepositRequest) GetPayer() *Participant {
 		return x.Payer
 	}
 	return nil
+}
+
+func (x *CreateDepositRequest) GetClientId() string {
+	if x != nil {
+		return x.ClientId
+	}
+	return ""
 }
 
 type CreateDepositResponse struct {
@@ -413,11 +421,12 @@ const file_deposits_proto_rawDesc = "" +
 	"\bprovider\x18\x02 \x01(\x0e2\x1d.depositsgrpc.DepositProviderR\bprovider\"\x83\x01\n" +
 	"\vParticipant\x12-\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x19.depositsgrpc.DepositTypeR\x04type\x12E\n" +
-	"\x0faccount_details\x18\x02 \x01(\v2\x1c.depositsgrpc.AccountDetailsR\x0eaccountDetails\"{\n" +
+	"\x0faccount_details\x18\x02 \x01(\v2\x1c.depositsgrpc.AccountDetailsR\x0eaccountDetails\"\x98\x01\n" +
 	"\x14CreateDepositRequest\x12\x16\n" +
 	"\x06amount\x18\x01 \x01(\tR\x06amount\x12\x1a\n" +
 	"\bcurrency\x18\x02 \x01(\tR\bcurrency\x12/\n" +
-	"\x05payer\x18\x03 \x01(\v2\x19.depositsgrpc.ParticipantR\x05payer\"\x88\x01\n" +
+	"\x05payer\x18\x03 \x01(\v2\x19.depositsgrpc.ParticipantR\x05payer\x12\x1b\n" +
+	"\tclient_id\x18\x04 \x01(\tR\bclientId\"\x88\x01\n" +
 	"\x15CreateDepositResponse\x12\x1d\n" +
 	"\n" +
 	"deposit_id\x18\x01 \x01(\tR\tdepositId\x123\n" +
