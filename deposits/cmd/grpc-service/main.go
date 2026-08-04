@@ -14,6 +14,7 @@ import (
 	"github.com/I-Frostbyte/rvpay-go/deposits/deposits"
 	"github.com/I-Frostbyte/rvpay-go/grpc/go/depositsgrpc"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -51,15 +52,13 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	}
 	logger = logger.Level(logLevel)
 
-	/*
-		dbConnectionURL := getPostgresConnectionURL(config.DB)
-		db, err := pgxpool.New(ctx, dbConnectionURL)
-		if err != nil {
-			return fmt.Errorf("failed to connect to database: %w", err)
-		}
+	dbConnectionURL := getPostgresConnectionURL(config.DB)
+	db, err := pgxpool.New(ctx, dbConnectionURL)
+	if err != nil {
+		return fmt.Errorf("failed to connect to database: %w", err)
+	}
 
-		defer db.Close()
-	*/
+	defer db.Close()
 
 	svrOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
@@ -73,7 +72,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	depositsgrpc.RegisterDepositsServiceServer(grpcServer, deposits.NewDepositsService(logger))
 	logger.Info().Msg("Successfully registered DepositsServiceServer...")
 
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", config.ListenPort))
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%v", config.ListenPort))
 	if err != nil {
 		return fmt.Errorf("net.Listen: %w", err)
 	}
