@@ -18,6 +18,8 @@ import (
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+	"github.com/I-Frostbyte/rvpay-go/deposits/db/repo"
+	"github.com/I-Frostbyte/pawapay_client"
 )
 
 func main() {
@@ -69,6 +71,20 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 
 	defer db.Close()
 
+	// Handling the db migration
+	err = repo.Migrate(dbConnectionURL, config.MigrationPath, logger)
+	if err != nil {
+		logger.Err(err).Msg("Migration not successful...")
+		return fmt.Errorf("failed to migrate: %w", err)
+	}
+	
+	logger.Info().Msg("Migrations successful...")
+
+	depositsRepo := repo.NewDepositsRepo(db)
+
+	// Initializing the pawapay client
+	pawapayClient := pawapay_client.NewClient(config.APIURL, config.APIKey)
+
 	svrOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
 			grpc_recovery.UnaryServerInterceptor(),
@@ -78,7 +94,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	grpcServer := grpc.NewServer(svrOpts...)
 	reflection.Register(grpcServer)
 
-	depositsgrpc.RegisterDepositsServiceServer(grpcServer, deposits.NewDepositsService(logger))
+	depositsgrpc.RegisterDepositsServiceServer(grpcServer, deposits.NewDepositsService(depositsRepo, logger, *pawapayClient))
 	logger.Info().Msg("Successfully registered DepositsServiceServer...")
 
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%v", config.ListenPort))

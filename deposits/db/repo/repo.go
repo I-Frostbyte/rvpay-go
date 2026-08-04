@@ -7,6 +7,8 @@ import (
 
 	"github.com/I-Frostbyte/rvpay-go/deposits/db/sqlc"
 	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres" // Postgres driver
+	_ "github.com/golang-migrate/migrate/v4/source/file"       // File source for migrations
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
