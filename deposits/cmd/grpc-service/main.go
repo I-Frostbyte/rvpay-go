@@ -10,16 +10,18 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/I-Frostbyte/pawapay_client"
 	"github.com/I-Frostbyte/rvpay-go/deposits/config"
+	"github.com/I-Frostbyte/rvpay-go/deposits/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/deposits/deposits"
 	"github.com/I-Frostbyte/rvpay-go/grpc/go/depositsgrpc"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
-	"github.com/I-Frostbyte/rvpay-go/deposits/db/repo"
-	"github.com/I-Frostbyte/pawapay_client"
 )
 
 func main() {
@@ -46,7 +48,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 		return err
 	}
 
-	logger.Info().Msgf("Successfully loaded config...: %+v", config)
+	logger.Info().Msg("successfully loaded configuration")
 
 	logLevel, err := zerolog.ParseLevel(config.LogLevel)
 	if err != nil {
@@ -77,7 +79,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 		logger.Err(err).Msg("Migration not successful...")
 		return fmt.Errorf("failed to migrate: %w", err)
 	}
-	
+
 	logger.Info().Msg("Migrations successful...")
 
 	depositsRepo := repo.NewDepositsRepo(db)
@@ -93,8 +95,11 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 
 	grpcServer := grpc.NewServer(svrOpts...)
 	reflection.Register(grpcServer)
+	healthServer := health.NewServer()
+	healthpb.RegisterHealthServer(grpcServer, healthServer)
 
 	depositsgrpc.RegisterDepositsServiceServer(grpcServer, deposits.NewDepositsService(depositsRepo, logger, *pawapayClient))
+	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	logger.Info().Msg("Successfully registered DepositsServiceServer...")
 
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%v", config.ListenPort))
@@ -118,11 +123,12 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	go func() {
 		<-ctx.Done()
 		logger.Info().Msg("Shutting down gRPC server...")
+		healthServer.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
 		grpcServer.GracefulStop()
 		logger.Info().Msg("gRPC server stopped.")
 	}()
 
-	logger.Info().Msgf(`HTTP server running on %s`, listener.Addr().String())
+	logger.Info().Msgf(`gRPC server running on %s`, listener.Addr().String())
 
 	wg.Wait()
 	logger.Info().Msg("gRPC server has shut down gracefully...")

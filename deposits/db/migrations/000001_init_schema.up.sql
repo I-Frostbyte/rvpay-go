@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TYPE payment_provider AS ENUM (
     'MTN_MOMO_CMR',
     'ORANGE_CMR'
