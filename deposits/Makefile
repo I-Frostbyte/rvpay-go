@@ -1,5 +1,7 @@
 -include .env
 
+IMAGE_TAG ?= rvpay-go-deposits:local
+
 install-tools:
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(shell go env GOPATH)/bin v1.64.8
 	go install github.com/sqlc-dev/sqlc/cmd/sqlc@1.26.0
@@ -18,7 +20,7 @@ test:
 
 build:
 	@echo "Building the project..."
-	docker build -f ./Dockerfile -t $(full_image_tag) ..
+	docker build -f ./Dockerfile -t $(or $(full_image_tag),$(IMAGE_TAG)) ..
 
 publish:
 	@echo "Publishing the project..."

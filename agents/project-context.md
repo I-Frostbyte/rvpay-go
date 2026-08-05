@@ -34,3 +34,9 @@ Goals:
 - Prefer ARM64-compatible images.
 - Minimize running costs.
 - Preserve clean architecture.
+
+Principles:
+- Preserve clean architecture.
+- Prefer generated code over handwritten boilerplate.
+- Keep builds reproducible from a clean clone.
+- Avoid duplicating business logic between gRPC and REST.

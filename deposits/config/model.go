@@ -17,6 +17,7 @@ type Config struct {
 	LogLevel      string `conf:"env:LOG_LEVEL,default:debug"`
 	ListenPort    string `conf:"env:LISTEN_PORT,required"`
 	MigrationPath string `conf:"env:MIGRATION_PATH,required"`
+	RunMigrations bool   `conf:"env:RUN_MIGRATIONS,default:true"`
 
 	DB DBConfig
 }
