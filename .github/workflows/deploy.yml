@@ -1,6 +1,6 @@
 # OCI delivery pipeline: test Go, publish a small ARM64 image to GHCR, then restart the OCI Compose stack over SSH.
 #
-# DISABLED: This workflow has no `on:` trigger, so GitHub Actions will never
+# DISABLED: This workflow has no `on:` trigger, so GitHub Actions will never run it.
 on:
   workflow_dispatch:
 
