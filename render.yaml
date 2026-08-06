@@ -1,0 +1,57 @@
+# Render Blueprint for rvpay-go
+# Deploys the Deposits gRPC/REST service and a managed PostgreSQL database.
+# See https://render.com/docs/blueprint-spec for the full schema.
+#
+# The service reads PORT (injected by Render) for the HTTP gateway and
+# LISTEN_PORT for the gRPC server. Render's health check hits /healthz on PORT.
+
+services:
+  - type: web
+    name: rvpay-deposits
+    runtime: docker
+    repo: https://github.com/I-Frostbyte/rvpay-go
+    branch: main
+    dockerfilePath: ./deposits/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: LISTEN_PORT
+        value: "50051"
+      - key: MIGRATION_PATH
+        value: /app/deposits/db/migrations
+      - key: RUN_MIGRATIONS
+        value: "true"
+      - key: LOG_LEVEL
+        value: info
+      - key: DB_TLS_DISABLED
+        value: "false"
+      - key: DB_HOST
+        fromDatabase:
+          name: rvpay-postgres
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: rvpay-postgres
+          property: port
+      - key: DB_USER
+        fromDatabase:
+          name: rvpay-postgres
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: rvpay-postgres
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: rvpay-postgres
+          property: database
+      - key: PAWAPAY_API_URL
+        sync: false
+      - key: PAWAPAY_API_KEY
+        sync: false
+
+databases:
+  - name: rvpay-postgres
+    databaseName: rvpay
+    user: rvpay
