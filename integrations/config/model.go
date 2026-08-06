@@ -14,6 +14,7 @@ type Config struct {
 	HighLevelClientSecret string `conf:"env:HIGHLEVEL_CLIENT_SECRET"`
 	HighLevelRedirectURL  string `conf:"env:HIGHLEVEL_REDIRECT_URL"`
 	HighLevelSSOKey       string `conf:"env:HIGHLEVEL_SSO_KEY"`
+	TokenEncryptionKey    string `conf:"env:TOKEN_ENCRYPTION_KEY,required"`
 	Env                   string `conf:"env:env"`
 	LogLevel              string `conf:"env:LOG_LEVEL,default:debug"`
 	ListenPort            string `conf:"env:LISTEN_PORT,required"`
