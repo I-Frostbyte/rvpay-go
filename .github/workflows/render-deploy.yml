@@ -31,18 +31,12 @@ jobs:
         with:
           go-version: "1.26.5"
       - name: Install protoc toolchain
-        # Versions are read from tools/versions.md (CI toolchain section).
         run: |
-          PROTOC_VERSION=$(sed -n 's/^- `protoc` — `\([^`]*\)`.*/\1/p' tools/versions.md)
-          PROTOC_GEN_GO_VERSION=$(sed -n 's/^- `protoc-gen-go` — `\([^`]*\)`.*/\1/p' tools/versions.md)
-          PROTOC_GEN_GO_GRPC_VERSION=$(sed -n 's/^- `protoc-gen-go-grpc` — `\([^`]*\)`.*/\1/p' tools/versions.md)
-          PROTOC_GEN_GATEWAY_VERSION=$(sed -n 's/^- `protoc-gen-grpc-gateway` — `\([^`]*\)`.*/\1/p' tools/versions.md)
-
           sudo apt-get update
-          sudo apt-get install -y "protobuf-compiler=$PROTOC_VERSION-*"
-          go install "google.golang.org/protobuf/cmd/protoc-gen-go@$PROTOC_GEN_GO_VERSION"
-          go install "google.golang.org/grpc/cmd/protoc-gen-go-grpc@$PROTOC_GEN_GO_GRPC_VERSION"
-          go install "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@$PROTOC_GEN_GATEWAY_VERSION"
+          sudo apt-get install -y protobuf-compiler
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.10
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+          go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.22.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: go generate
         run: go generate ./...
@@ -52,11 +46,9 @@ jobs:
           make generate-protos
           cd ..
       - name: sqlc generation
-        # Version is read from tools/versions.md (Project-pinned versions table).
         run: |
-          SQLC_VERSION=$(sed -n 's/^| sqlc | \(v[^ |]*\) |.*/\1/p' tools/versions.md)
           cd deposits/db
-          go run "github.com/sqlc-dev/sqlc/cmd/sqlc@$SQLC_VERSION" generate
+          go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 generate
           cd ../..
       - name: Verify generated code is current
         run: |
