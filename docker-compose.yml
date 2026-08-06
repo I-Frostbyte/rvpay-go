@@ -1,0 +1,106 @@
+# OCI Always Free stack: one ARM64 application, one migration job, PostgreSQL, and a non-root TLS proxy.
+name: rvpay
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    platform: linux/arm64
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+
+  migration:
+    # A separate, one-shot migration job prevents application replicas from migrating independently.
+    image: migrate/migrate:v4.19.1
+    platform: linux/arm64
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./deposits/db/migrations:/migrations:ro
+    command:
+      - "-path=/migrations"
+      - "-database=postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?sslmode=disable"
+      - up
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+
+  deposits:
+    # DEPOSITS_IMAGE is set by CI on OCI; the default supports a local production build.
+    image: ${DEPOSITS_IMAGE:-rvpay/deposits:local}
+    build:
+      context: .
+      dockerfile: deposits/Dockerfile
+    platform: linux/arm64
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_TLS_DISABLED: "true"
+      MIGRATION_PATH: /app/deposits/db/migrations
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+
+  nginx:
+    # Nginx terminates public TLS and forwards HTTP/2 gRPC only over the private Compose network.
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    platform: linux/arm64
+    restart: unless-stopped
+    depends_on:
+      - deposits
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+
+volumes:
+  # A named volume keeps PostgreSQL data within the OCI block-volume allocation.
+  postgres-data:

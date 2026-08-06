@@ -1,0 +1,96 @@
+# Render delivery pipeline: generate code, test Go, build the Docker image,
+# then trigger a Render deploy via its deploy hook.
+#
+# Pipeline order (per render-generator.md):
+#   1. go generate
+#   2. protoc generation
+#   3. sqlc generation
+#   4. tests
+#   5. Docker build
+#   6. Render deployment
+#
+# The existing .github/workflows/deploy.yml targets OCI and is left untouched.
+name: Deploy to Render
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.5"
+      - name: Install protoc toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+          go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.22.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: go generate
+        run: go generate ./...
+      - name: protoc generation
+        run: |
+          cd protobuf
+          make generate-protos
+          cd ..
+      - name: sqlc generation
+        run: |
+          cd deposits/db
+          go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 generate
+          cd ../..
+      - name: Verify generated code is current
+        run: |
+          git diff --exit-code grpc/go deposits/db/sqlc deposits/db/repo/mocks deposits/db/sqlc/mocks || {
+            echo "Generated code is out of date. Commit the generated output."
+            exit 1
+          }
+
+  test:
+    needs: generate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.5"
+      - name: Run tests
+        run: go test ./...
+
+  docker-build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build Docker image
+        run: docker build -f deposits/Dockerfile -t rvpay-deposits:ci .
+
+  deploy:
+    needs: docker-build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "RENDER_DEPLOY_HOOK secret is not set. Skipping deploy."
+            exit 0
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK"

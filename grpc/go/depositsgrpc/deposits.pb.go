@@ -448,7 +448,7 @@ const file_deposits_proto_rawDesc = "" +
 	"\x1dDEPOSIT_PROVIDER_MTN_MOMO_CMR\x10\x01\x12$\n" +
 	" DEPOSIT_PROVIDER_ORANGE_MOMO_CMR\x10\x022\x8d\x01\n" +
 	"\x0fDepositsService\x12z\n" +
-	"\x0fInitiateDeposit\x12\".depositsgrpc.CreateDepositRequest\x1a#.depositsgrpc.CreateDepositResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/v1/public/depositsB0Z.github.com/rvpay/rvpay-go/grpc/go/depositsgrpcb\x06proto3"
+	"\x0fInitiateDeposit\x12\".depositsgrpc.CreateDepositRequest\x1a#.depositsgrpc.CreateDepositResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/v1/public/depositsB6Z4github.com/I-Frostbyte/rvpay-go/grpc/go/depositsgrpcb\x06proto3"
 
 var (
 	file_deposits_proto_rawDescOnce sync.Once

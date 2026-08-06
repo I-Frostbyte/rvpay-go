@@ -1,0 +1,12 @@
+# Keep OCI build uploads and image layers small; deployment secrets are never part of an image.
+.git
+.github
+.agents
+agents
+third_party
+**/.env
+**/*.md
+**/*_test.go
+bin
+tmp
+coverage
