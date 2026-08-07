@@ -2,8 +2,8 @@
 **/.env
 
 # Ignore any agent prompts
-AGENTS.md
-agents/
+# AGENTS.md
+# agents/
 
 # Ignore previous oci configuration
 deploy-oci-bootstrap.sh

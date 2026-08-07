@@ -1,0 +1,487 @@
+# Cline Project Rules
+
+## Mission
+
+You are modifying an existing Go microservices repository.
+
+Your priority is preserving existing architecture.
+
+## Absolute Rules
+
+1. NEVER overwrite existing working code.
+
+2. NEVER refactor existing services unless explicitly instructed.
+
+3. NEVER modify deposits/.
+
+4. NEVER rename existing folders.
+
+5. NEVER change existing protobuf contracts.
+
+6. NEVER change existing database migrations.
+
+7. NEVER replace existing patterns with your preferred patterns.
+
+## Existing Service Is The Template
+
+The deposits service is the source of truth.
+
+All new services must copy:
+
+* folder layout
+* package naming
+* constructors
+* dependency injection
+* logging
+* error handling
+* configuration style
+* repository pattern
+* sqlc workflow
+* migration workflow
+
+## Before Writing Code
+
+Always:
+
+1. Inspect existing implementation.
+2. Explain planned changes.
+3. Identify files affected.
+4. Wait for confirmation if modifying existing files.
+
+## New Service Rules
+
+New services must live independently.
+
+Example:
+
+```
+integrations/
+
+cmd/
+config/
+db/
+integration/
+oauth/
+webhook/
+highlevel/
+```
+
+## Database Rules
+
+Always:
+
+* create up migration
+* create down migration
+* create SQL queries
+* regenerate sqlc
+* verify generated code
+
+Never manually edit sqlc generated files.
+
+## Secrets
+
+Never:
+
+* commit .env files
+* hardcode API keys
+* hardcode tokens
+
+Use environment configuration.
+
+## Protobuf Rules
+
+Never manually edit generated grpc files.
+
+Always:
+
+modify:
+
+protobuf/*.proto
+
+then run generation.
+
+## Code Quality
+
+Before completing:
+
+Run:
+
+go test ./...
+
+go generate ./...
+
+go vet ./...
+
+Report:
+
+* files created
+* files changed
+* commands executed
+* failures encountered
+
+## Final Rule
+
+If uncertain, inspect existing deposits implementation before creating anything.
+
+# Repository Exploration Rules
+
+## Purpose
+
+Prevent unnecessary repository crawling and keep analysis focused.
+
+You have a limited context budget.
+
+Do not attempt to understand the entire repository.
+
+Only inspect files required to complete the current task.
+
+---
+
+## Forbidden Exploration
+
+Do NOT recursively scan the entire repository.
+
+Do NOT use broad discovery commands such as:
+
+find .
+tree -a
+grep -R .
+rg .
+
+unless restricted to a specific approved directory.
+
+Avoid:
+
+find .
+
+because this repository contains generated files and external dependencies.
+
+---
+
+## Ignored Directories
+
+Do not enter or inspect:
+
+.git/
+vendor/
+node_modules/
+tmp/
+coverage/
+dist/
+bin/
+
+These are not application architecture.
+
+---
+
+## External Dependencies
+
+Do not inspect:
+
+third_party/
+
+including:
+
+third_party/googleapis/
+
+Reason:
+
+These are external protobuf dependencies.
+
+Only inspect:
+
+- protobuf import statements
+- Makefiles referencing them
+- generation configuration
+
+Do not analyze their contents.
+
+---
+
+## Generated Code Rules
+
+Generated code is output, not architecture.
+
+Do not inspect or modify:
+
+grpc/go//*.pb.go
+grpc/go//*.pb.grpc.go
+
+unless:
+
+- verifying generated output
+- debugging generation failures
+
+Source files are:
+
+protobuf/*.proto
+
+Generated output is:
+
+grpc/go/
+
+---
+
+## Testing Files
+
+Do not inspect:
+
+*_test.go
+
+unless:
+
+- the task specifically involves tests
+- debugging a failing test
+
+Do not use tests as architecture documentation.
+
+---
+
+## Exploration Depth
+
+Default maximum exploration depth:
+
+2 directory levels
+
+Example:
+
+Allowed:
+
+
+deposits/
+├── config/
+├── db/
+├── deposits/
+
+Avoid:
+
+deposits/db/sqlc/internal/generated/deep/path
+
+unless specifically required.
+---
+
+## Before Opening Additional Files
+
+Ask:
+
+"Does this file define architecture, interfaces, configuration, or business logic?"
+
+If the answer is no:
+
+Do not inspect it.
+
+Examples:
+
+Inspect:
+
+service.go
+config.go
+repo.go
+migration files
+.sql files
+.proto files
+Makefile
+Dockerfile
+
+Avoid:
+
+generated files
+dependency code
+vendor code
+external modules
+
+
+---
+
+# Existing Service Is The Template
+
+The deposits service defines the project conventions.
+
+All new services must match:
+
+- folder layout
+- package naming
+- constructor style
+- dependency injection
+- logging approach
+- error handling
+- context handling
+- repository pattern
+- sqlc workflow
+- migration workflow
+- configuration style
+
+Do not create a new pattern.
+
+Copy the existing pattern.
+
+---
+
+# Service Creation Rules
+
+New services must be isolated.
+
+Example:
+
+integrations/
+
+cmd/
+config/
+db/
+integration/
+oauth/
+webhook/
+highlevel/
+
+Each service owns:
+
+- configuration
+- database layer
+- repositories
+- business logic
+- handlers
+
+Do not place service-specific code inside existing services.
+
+---
+
+# Database Rules
+
+For every database change:
+
+Create:
+
+up migration
+down migration
+SQL queries
+sqlc generation
+
+Never manually edit:
+
+sqlc generated files
+
+The workflow is:
+
+migration
+|
+SQL query
+|
+sqlc generate
+|
+generated code
+
+
+---
+
+# Protobuf Rules
+
+Never manually edit:
+grpc/go/
+
+Modify:
+protobuf/*.proto
+
+Then regenerate.
+
+Generation workflow must follow existing Makefiles.
+
+---
+
+# Configuration Rules
+
+Never:
+
+- hardcode credentials
+- commit secrets
+- add API keys to source code
+
+All configuration must use environment variables.
+
+Follow existing config loading patterns.
+
+---
+
+# Dependency Rules
+
+Before adding dependencies:
+
+Explain:
+
+- why it is needed
+- alternatives considered
+- impact on existing services
+
+Do not add unnecessary libraries.
+
+---
+
+# Build and Validation Rules
+
+Before declaring completion:
+
+Run appropriate checks.
+
+For service-specific changes:
+
+Prefer:
+
+go test ./service-name/...
+
+Avoid:
+
+go test ./...
+
+unless explicitly requested.
+
+Run:
+
+go generate ./...
+
+when generated code changes.
+
+Verify:
+
+- generated code is current
+- migrations are valid
+- builds succeed
+
+---
+
+# Change Reporting
+
+At completion provide:
+
+## Files Created
+
+List all new files.
+
+## Files Modified
+
+List all modified files.
+
+## Commands Executed
+
+List:
+
+- generation commands
+- tests
+- builds
+
+## Issues Found
+
+List:
+
+- blockers
+- assumptions
+- follow-up work
+
+---
+
+# Final Rule
+
+When uncertain:
+
+1. Inspect the deposits implementation.
+2. Follow existing patterns.
+3. Prefer the smallest change.
+4. Do not invent architecture.
