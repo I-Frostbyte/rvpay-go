@@ -72,6 +72,21 @@ func (mr *MockQuerierMockRecorder) CreateWebhookEvent(ctx, arg any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateWebhookEvent", reflect.TypeOf((*MockQuerier)(nil).CreateWebhookEvent), ctx, arg)
 }
 
+// DeleteIntegration mocks base method.
+func (m *MockQuerier) DeleteIntegration(ctx context.Context, id uuid.UUID) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteIntegration", ctx, id)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteIntegration indicates an expected call of DeleteIntegration.
+func (mr *MockQuerierMockRecorder) DeleteIntegration(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteIntegration", reflect.TypeOf((*MockQuerier)(nil).DeleteIntegration), ctx, id)
+}
+
 // GetIntegrationByID mocks base method.
 func (m *MockQuerier) GetIntegrationByID(ctx context.Context, id uuid.UUID) (sqlc.Integration, error) {
 	m.ctrl.T.Helper()
