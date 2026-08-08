@@ -8,8 +8,16 @@ install-tools:
 	go install go.uber.org/mock/mockgen@v0.6.0
 
 generate:
-	@echo "Generating code..."
+	@echo "Generating all code..."
 	go generate ./...
+
+generate-protos:
+	@echo "Generating protobuf code..."
+	cd ../protobuf && make generate
+
+generate-sql:
+	@echo "Generating sqlc code..."
+	sqlc generate -f db/sqlc.yaml
 
 lint:
 	go run github.com/golangci/golangci-lint/cmd/golangci-lint@1.64.8 run ./...
@@ -20,6 +28,10 @@ test:
 
 build:
 	@echo "Building the project..."
+	go build -trimpath -ldflags="-s -w" -o ./bin/clients-grpc-service ./cmd/grpc-service
+
+docker-build:
+	@echo "Building Docker image..."
 	docker build -f ./Dockerfile -t $(or $(full_image_tag),$(IMAGE_TAG)) ..
 
 publish:
