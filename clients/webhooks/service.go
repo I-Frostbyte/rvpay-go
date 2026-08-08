@@ -65,8 +65,8 @@ func (s *Service) RegisterWebhook(ctx context.Context, integrationID uuid.UUID, 
 		return ErrProviderNotSupported
 	}
 
-	webhookProvider, ok := provider.(providers.WebhookProvider)
-	if !ok {
+	webhookProvider := provider.WebhookProvider()
+	if webhookProvider == nil {
 		return ErrProviderNotSupported
 	}
 
@@ -116,8 +116,8 @@ func (s *Service) UnregisterWebhook(ctx context.Context, integrationID uuid.UUID
 		return ErrProviderNotSupported
 	}
 
-	webhookProvider, ok := provider.(providers.WebhookProvider)
-	if !ok {
+	webhookProvider := provider.WebhookProvider()
+	if webhookProvider == nil {
 		return ErrProviderNotSupported
 	}
 
@@ -143,8 +143,8 @@ func (s *Service) ProcessWebhook(ctx context.Context, providerID string, headers
 		return ErrProviderNotSupported
 	}
 
-	webhookProvider, ok := provider.(providers.WebhookProvider)
-	if !ok {
+	webhookProvider := provider.WebhookProvider()
+	if webhookProvider == nil {
 		return ErrProviderNotSupported
 	}
 
@@ -183,7 +183,7 @@ func (s *Service) ProcessWebhook(ctx context.Context, providerID string, headers
 		return translateError(err)
 	}
 
-	dispatcher, ok := provider.(providers.WebhookDispatcher)
+	dispatcher, ok := webhookProvider.(providers.WebhookDispatcher)
 	if ok {
 		err = dispatcher.Dispatch(ctx, event)
 		if err != nil {
