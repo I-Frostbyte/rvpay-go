@@ -8,79 +8,72 @@ import "google/protobuf/timestamp.proto";
 import "google/api/annotations.proto";
 
 message Integration {
-    string id = 1;
-    string provider = 2;
-    string location_id = 3;
-    string access_token = 4;
-    string refresh_token = 5;
-    google.protobuf.Timestamp token_expires_at = 6;
-    google.protobuf.Timestamp created_at = 7;
-    google.protobuf.Timestamp updated_at = 8;
+  string id = 1;
+  string provider = 2;
+  string location_id = 3;
+  string access_token = 4;
+  string refresh_token = 5;
+  google.protobuf.Timestamp token_expires_at = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
 }
 
 message CreateIntegrationRequest {
-    string provider = 1;
-    string location_id = 2;
-    string access_token = 3;
-    string refresh_token = 4;
-    google.protobuf.Timestamp token_expires_at = 5;
+  string provider = 1;
+  string location_id = 2;
+  string access_token = 3;
+  string refresh_token = 4;
+  google.protobuf.Timestamp token_expires_at = 5;
 }
 
-message CreateIntegrationResponse {
-    Integration integration = 1;
-}
+message CreateIntegrationResponse { Integration integration = 1; }
 
-message GetIntegrationRequest {
-    string id = 1;
-}
+message GetIntegrationRequest { string id = 1; }
 
-message GetIntegrationResponse {
-    Integration integration = 1;
-}
+message GetIntegrationResponse { Integration integration = 1; }
 
-message DeleteIntegrationRequest {
-    string id = 1;
-}
+message DeleteIntegrationRequest { string id = 1; }
 
-message DeleteIntegrationResponse {
-    string id = 1;
-}
+message DeleteIntegrationResponse { string id = 1; }
 
 message ProcessWebhookEventRequest {
-    string provider = 1;
-    string event_type = 2;
-    string payload = 3;
+  string provider = 1;
+  string event_type = 2;
+  string payload = 3;
 }
 
 message ProcessWebhookEventResponse {
-    string id = 1;
-    bool processed = 2;
+  string id = 1;
+  bool processed = 2;
 }
 
 service IntegrationService {
-    rpc CreateIntegration(CreateIntegrationRequest) returns (CreateIntegrationResponse) {
-        option (google.api.http) = {
-            post: "/v1/public/integrations"
-            body: "*"
-        };
-    }
+  rpc CreateIntegration(CreateIntegrationRequest)
+      returns (CreateIntegrationResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/integrations"
+      body : "*"
+    };
+  }
 
-    rpc GetIntegration(GetIntegrationRequest) returns (GetIntegrationResponse) {
-        option (google.api.http) = {
-            get: "/v1/public/integrations/{id}"
-        };
-    }
+  rpc GetIntegration(GetIntegrationRequest) returns (GetIntegrationResponse) {
+    option (google.api.http) = {
+      get : "/v1/public/integrations/{id}"
+    };
+  }
 
-    rpc DeleteIntegration(DeleteIntegrationRequest) returns (DeleteIntegrationResponse) {
-        option (google.api.http) = {
-            delete: "/v1/public/integrations/{id}"
-        };
-    }
+  rpc DeleteIntegration(DeleteIntegrationRequest)
+      returns (DeleteIntegrationResponse) {
+    option (google.api.http) = {
+      delete : "/v1/public/integrations/{id}"
+    };
+  }
 
-    rpc ProcessWebhookEvent(ProcessWebhookEventRequest) returns (ProcessWebhookEventResponse) {
-        option (google.api.http) = {
-            post: "/v1/public/webhooks"
-            body: "*"
-        };
-    }
+  rpc ProcessWebhookEvent(ProcessWebhookEventRequest)
+      returns (ProcessWebhookEventResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/webhooks"
+      body : "*"
+    };
+  }
 }

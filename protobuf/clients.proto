@@ -1,0 +1,454 @@
+syntax = "proto3";
+
+package clientsgrpc;
+
+option go_package = "github.com/I-Frostbyte/rvpay-go/grpc/go/clientsgrpc";
+
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+import "common.proto";
+
+// Client represents a business using RVPay.
+message Client {
+  // id is the unique identifier of the client.
+  string id = 1;
+  // name is the display name of the client.
+  string name = 2;
+  // status is the current lifecycle state of the client.
+  commongrpc.ClientStatus status = 3;
+  // created_at is the time the client was created.
+  google.protobuf.Timestamp created_at = 4;
+  // updated_at is the time the client was last modified.
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+// CreateClientRequest is the request to create a new client.
+message CreateClientRequest {
+  // name is the display name of the client.
+  string name = 1;
+}
+
+// CreateClientResponse is the response after creating a client.
+message CreateClientResponse {
+  // client is the created client resource.
+  Client client = 1;
+}
+
+// UpdateClientRequest is the request to update an existing client.
+message UpdateClientRequest {
+  // id is the unique identifier of the client to update.
+  string id = 1;
+  // name is the updated display name of the client.
+  string name = 2;
+}
+
+// UpdateClientResponse is the response after updating a client.
+message UpdateClientResponse {
+  // client is the updated client resource.
+  Client client = 1;
+}
+
+// DeleteClientRequest is the request to delete a client.
+message DeleteClientRequest {
+  // id is the unique identifier of the client to delete.
+  string id = 1;
+}
+
+// DeleteClientResponse is the response after deleting a client.
+message DeleteClientResponse {
+  // id is the unique identifier of the deleted client.
+  string id = 1;
+}
+
+// GetClientRequest is the request to fetch a single client.
+message GetClientRequest {
+  // id is the unique identifier of the client to fetch.
+  string id = 1;
+}
+
+// GetClientResponse is the response containing a single client.
+message GetClientResponse {
+  // client is the requested client resource.
+  Client client = 1;
+}
+
+// ListClientsRequest is the request to list clients.
+message ListClientsRequest {
+  // pagination controls the page size and cursor.
+  commongrpc.PaginationRequest pagination = 1;
+}
+
+// ListClientsResponse is the response containing a list of clients.
+message ListClientsResponse {
+  // clients is the list of client resources.
+  repeated Client clients = 1;
+  // pagination carries the next page cursor and total count.
+  commongrpc.PaginationResponse pagination = 2;
+}
+
+// ActivateClientRequest is the request to activate a client.
+message ActivateClientRequest {
+  // id is the unique identifier of the client to activate.
+  string id = 1;
+}
+
+// ActivateClientResponse is the response after activating a client.
+message ActivateClientResponse {
+  // client is the updated client resource.
+  Client client = 1;
+}
+
+// DeactivateClientRequest is the request to deactivate a client.
+message DeactivateClientRequest {
+  // id is the unique identifier of the client to deactivate.
+  string id = 1;
+}
+
+// DeactivateClientResponse is the response after deactivating a client.
+message DeactivateClientResponse {
+  // client is the updated client resource.
+  Client client = 1;
+}
+
+// Platform represents a supported external marketplace platform.
+message Platform {
+  // id is the unique identifier of the platform.
+  string id = 1;
+  // name is the canonical name of the platform.
+  string name = 2;
+  // display_name is the human-readable name of the platform.
+  string display_name = 3;
+  // slug is the URL-safe identifier of the platform.
+  string slug = 4;
+  // status is the current lifecycle state of the platform.
+  commongrpc.PlatformStatus status = 5;
+  // capabilities lists the capabilities the platform supports.
+  repeated commongrpc.ProviderCapability capabilities = 6;
+  // created_at is the time the platform was created.
+  google.protobuf.Timestamp created_at = 7;
+  // updated_at is the time the platform was last modified.
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+// ListPlatformsRequest is the request to list platforms.
+message ListPlatformsRequest {
+  // pagination controls the page size and cursor.
+  commongrpc.PaginationRequest pagination = 1;
+}
+
+// ListPlatformsResponse is the response containing a list of platforms.
+message ListPlatformsResponse {
+  // platforms is the list of platform resources.
+  repeated Platform platforms = 1;
+  // pagination carries the next page cursor and total count.
+  commongrpc.PaginationResponse pagination = 2;
+}
+
+// GetPlatformRequest is the request to fetch a single platform.
+message GetPlatformRequest {
+  // id is the unique identifier of the platform to fetch.
+  string id = 1;
+}
+
+// GetPlatformResponse is the response containing a single platform.
+message GetPlatformResponse {
+  // platform is the requested platform resource.
+  Platform platform = 1;
+}
+
+// EnablePlatformRequest is the request to enable a platform.
+message EnablePlatformRequest {
+  // id is the unique identifier of the platform to enable.
+  string id = 1;
+}
+
+// EnablePlatformResponse is the response after enabling a platform.
+message EnablePlatformResponse {
+  // platform is the updated platform resource.
+  Platform platform = 1;
+}
+
+// DisablePlatformRequest is the request to disable a platform.
+message DisablePlatformRequest {
+  // id is the unique identifier of the platform to disable.
+  string id = 1;
+}
+
+// DisablePlatformResponse is the response after disabling a platform.
+message DisablePlatformResponse {
+  // platform is the updated platform resource.
+  Platform platform = 1;
+}
+
+// Integration represents a client connected to a platform.
+message Integration {
+  // id is the unique identifier of the integration.
+  string id = 1;
+  // client_id is the unique identifier of the owning client.
+  string client_id = 2;
+  // platform_id is the unique identifier of the connected platform.
+  string platform_id = 3;
+  // external_account_id is the provider-side account identifier.
+  string external_account_id = 4;
+  // status is the current lifecycle state of the integration.
+  commongrpc.IntegrationStatus status = 5;
+  // installed_at is the time the integration was installed.
+  google.protobuf.Timestamp installed_at = 6;
+  // last_sync_at is the time the integration was last synchronized.
+  google.protobuf.Timestamp last_sync_at = 7;
+  // created_at is the time the integration was created.
+  google.protobuf.Timestamp created_at = 8;
+  // updated_at is the time the integration was last modified.
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+// InstallIntegrationRequest is the request to install an integration.
+message InstallIntegrationRequest {
+  // client_id is the unique identifier of the owning client.
+  string client_id = 1;
+  // platform_id is the unique identifier of the platform to connect.
+  string platform_id = 2;
+}
+
+// InstallIntegrationResponse is the response after installing an integration.
+message InstallIntegrationResponse {
+  // integration is the installed integration resource.
+  Integration integration = 1;
+}
+
+// UninstallIntegrationRequest is the request to uninstall an integration.
+message UninstallIntegrationRequest {
+  // id is the unique identifier of the integration to uninstall.
+  string id = 1;
+}
+
+// UninstallIntegrationResponse is the response after uninstalling an
+// integration.
+message UninstallIntegrationResponse {
+  // id is the unique identifier of the uninstalled integration.
+  string id = 1;
+}
+
+// GetIntegrationRequest is the request to fetch a single integration.
+message GetIntegrationRequest {
+  // id is the unique identifier of the integration to fetch.
+  string id = 1;
+}
+
+// GetIntegrationResponse is the response containing a single integration.
+message GetIntegrationResponse {
+  // integration is the requested integration resource.
+  Integration integration = 1;
+}
+
+// ListIntegrationsRequest is the request to list integrations.
+message ListIntegrationsRequest {
+  // client_id filters integrations by owning client.
+  string client_id = 1;
+  // platform_id filters integrations by connected platform.
+  string platform_id = 2;
+  // pagination controls the page size and cursor.
+  commongrpc.PaginationRequest pagination = 3;
+}
+
+// ListIntegrationsResponse is the response containing a list of integrations.
+message ListIntegrationsResponse {
+  // integrations is the list of integration resources.
+  repeated Integration integrations = 1;
+  // pagination carries the next page cursor and total count.
+  commongrpc.PaginationResponse pagination = 2;
+}
+
+// ReconnectIntegrationRequest is the request to reconnect an integration.
+message ReconnectIntegrationRequest {
+  // id is the unique identifier of the integration to reconnect.
+  string id = 1;
+}
+
+// ReconnectIntegrationResponse is the response after reconnecting an
+// integration.
+message ReconnectIntegrationResponse {
+  // integration is the updated integration resource.
+  Integration integration = 1;
+}
+
+// DisconnectIntegrationRequest is the request to disconnect an integration.
+message DisconnectIntegrationRequest {
+  // id is the unique identifier of the integration to disconnect.
+  string id = 1;
+}
+
+// DisconnectIntegrationResponse is the response after disconnecting an
+// integration.
+message DisconnectIntegrationResponse {
+  // integration is the updated integration resource.
+  Integration integration = 1;
+}
+
+// SyncIntegrationRequest is the request to synchronize an integration.
+message SyncIntegrationRequest {
+  // id is the unique identifier of the integration to synchronize.
+  string id = 1;
+}
+
+// SyncIntegrationResponse is the response after synchronizing an integration.
+message SyncIntegrationResponse {
+  // integration is the updated integration resource.
+  Integration integration = 1;
+}
+
+// ClientsService manages client accounts.
+service ClientsService {
+  // CreateClient creates a new client account.
+  rpc CreateClient(CreateClientRequest) returns (CreateClientResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/clients"
+      body : "*"
+    };
+  }
+
+  // UpdateClient updates an existing client account.
+  rpc UpdateClient(UpdateClientRequest) returns (UpdateClientResponse) {
+    option (google.api.http) = {
+      patch : "/v1/public/clients/{id}"
+      body : "*"
+    };
+  }
+
+  // DeleteClient deletes a client account.
+  rpc DeleteClient(DeleteClientRequest) returns (DeleteClientResponse) {
+    option (google.api.http) = {
+      delete : "/v1/public/clients/{id}"
+    };
+  }
+
+  // GetClient fetches a single client account.
+  rpc GetClient(GetClientRequest) returns (GetClientResponse) {
+    option (google.api.http) = {
+      get : "/v1/public/clients/{id}"
+    };
+  }
+
+  // ListClients lists client accounts.
+  rpc ListClients(ListClientsRequest) returns (ListClientsResponse) {
+    option (google.api.http) = {
+      get : "/v1/public/clients"
+    };
+  }
+
+  // ActivateClient activates a client account.
+  rpc ActivateClient(ActivateClientRequest) returns (ActivateClientResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/clients/{id}:activate"
+      body : "*"
+    };
+  }
+
+  // DeactivateClient deactivates a client account.
+  rpc DeactivateClient(DeactivateClientRequest)
+      returns (DeactivateClientResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/clients/{id}:deactivate"
+      body : "*"
+    };
+  }
+}
+
+// PlatformsService manages supported marketplace platforms.
+service PlatformsService {
+  // ListPlatforms lists supported platforms.
+  rpc ListPlatforms(ListPlatformsRequest) returns (ListPlatformsResponse) {
+    option (google.api.http) = {
+      get : "/v1/public/platforms"
+    };
+  }
+
+  // GetPlatform fetches a single platform.
+  rpc GetPlatform(GetPlatformRequest) returns (GetPlatformResponse) {
+    option (google.api.http) = {
+      get : "/v1/public/platforms/{id}"
+    };
+  }
+
+  // EnablePlatform enables a platform.
+  rpc EnablePlatform(EnablePlatformRequest) returns (EnablePlatformResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/platforms/{id}:enable"
+      body : "*"
+    };
+  }
+
+  // DisablePlatform disables a platform.
+  rpc DisablePlatform(DisablePlatformRequest)
+      returns (DisablePlatformResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/platforms/{id}:disable"
+      body : "*"
+    };
+  }
+}
+
+// IntegrationsService manages client-platform integrations.
+service IntegrationsService {
+  // InstallIntegration installs a platform for a client.
+  rpc InstallIntegration(InstallIntegrationRequest)
+      returns (InstallIntegrationResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/integrations"
+      body : "*"
+    };
+  }
+
+  // UninstallIntegration uninstalls a platform for a client.
+  rpc UninstallIntegration(UninstallIntegrationRequest)
+      returns (UninstallIntegrationResponse) {
+    option (google.api.http) = {
+      delete : "/v1/public/integrations/{id}"
+    };
+  }
+
+  // GetIntegration fetches a single integration.
+  rpc GetIntegration(GetIntegrationRequest) returns (GetIntegrationResponse) {
+    option (google.api.http) = {
+      get : "/v1/public/integrations/{id}"
+    };
+  }
+
+  // ListIntegrations lists integrations.
+  rpc ListIntegrations(ListIntegrationsRequest)
+      returns (ListIntegrationsResponse) {
+    option (google.api.http) = {
+      get : "/v1/public/integrations"
+      additional_bindings {
+        get : "/v1/public/clients/{client_id}/integrations"
+      }
+    };
+  }
+
+  // ReconnectIntegration reconnects an integration.
+  rpc ReconnectIntegration(ReconnectIntegrationRequest)
+      returns (ReconnectIntegrationResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/integrations/{id}:reconnect"
+      body : "*"
+    };
+  }
+
+  // DisconnectIntegration disconnects an integration.
+  rpc DisconnectIntegration(DisconnectIntegrationRequest)
+      returns (DisconnectIntegrationResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/integrations/{id}:disconnect"
+      body : "*"
+    };
+  }
+
+  // SyncIntegration synchronizes an integration.
+  rpc SyncIntegration(SyncIntegrationRequest)
+      returns (SyncIntegrationResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/integrations/{id}:sync"
+      body : "*"
+    };
+  }
+}

@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+package commongrpc;
+
+option go_package = "github.com/I-Frostbyte/rvpay-go/grpc/go/commongrpc";
+
+import "google/protobuf/timestamp.proto";
+
+// ClientStatus represents the lifecycle state of a client account.
+enum ClientStatus {
+  // CLIENT_STATUS_UNSPECIFIED is the default value and is not a valid state.
+  CLIENT_STATUS_UNSPECIFIED = 0;
+  // CLIENT_STATUS_REGISTERED indicates the client record has been created.
+  CLIENT_STATUS_REGISTERED = 1;
+  // CLIENT_STATUS_ACTIVE indicates the client can create integrations and
+  // transact.
+  CLIENT_STATUS_ACTIVE = 2;
+  // CLIENT_STATUS_SUSPENDED indicates the client cannot transact; records are
+  // preserved.
+  CLIENT_STATUS_SUSPENDED = 3;
+  // CLIENT_STATUS_CLOSED indicates the client is deactivated; records are
+  // retained for audit.
+  CLIENT_STATUS_CLOSED = 4;
+}
+
+// PlatformStatus represents the lifecycle state of a marketplace platform.
+enum PlatformStatus {
+  // PLATFORM_STATUS_UNSPECIFIED is the default value and is not a valid state.
+  PLATFORM_STATUS_UNSPECIFIED = 0;
+  // PLATFORM_STATUS_ACTIVE indicates the platform can host integrations.
+  PLATFORM_STATUS_ACTIVE = 1;
+  // PLATFORM_STATUS_DISABLED indicates the platform no longer accepts new
+  // integrations.
+  PLATFORM_STATUS_DISABLED = 2;
+}
+
+// IntegrationStatus represents the lifecycle state of a client-platform
+// integration.
+enum IntegrationStatus {
+  // INTEGRATION_STATUS_UNSPECIFIED is the default value and is not a valid
+  // state.
+  INTEGRATION_STATUS_UNSPECIFIED = 0;
+  // INTEGRATION_STATUS_CREATED indicates the integration record has been
+  // created.
+  INTEGRATION_STATUS_CREATED = 1;
+  // INTEGRATION_STATUS_OAUTH_PENDING indicates the OAuth handshake is in
+  // progress.
+  INTEGRATION_STATUS_OAUTH_PENDING = 2;
+  // INTEGRATION_STATUS_ACTIVE indicates OAuth is complete and the integration
+  // is live.
+  INTEGRATION_STATUS_ACTIVE = 3;
+  // INTEGRATION_STATUS_REVOKED indicates the client disconnected the
+  // integration.
+  INTEGRATION_STATUS_REVOKED = 4;
+}
+
+// OAuthStatus represents the state of an OAuth token lifecycle.
+enum OAuthStatus {
+  // OAUTH_STATUS_UNSPECIFIED is the default value and is not a valid state.
+  OAUTH_STATUS_UNSPECIFIED = 0;
+  // OAUTH_STATUS_PENDING indicates tokens have not yet been issued.
+  OAUTH_STATUS_PENDING = 1;
+  // OAUTH_STATUS_ACTIVE indicates tokens are valid and usable.
+  OAUTH_STATUS_ACTIVE = 2;
+  // OAUTH_STATUS_EXPIRED indicates tokens have expired and require refresh.
+  OAUTH_STATUS_EXPIRED = 3;
+  // OAUTH_STATUS_REVOKED indicates tokens have been revoked.
+  OAUTH_STATUS_REVOKED = 4;
+}
+
+// WebhookStatus represents the state of a webhook subscription.
+enum WebhookStatus {
+  // WEBHOOK_STATUS_UNSPECIFIED is the default value and is not a valid state.
+  WEBHOOK_STATUS_UNSPECIFIED = 0;
+  // WEBHOOK_STATUS_ACTIVE indicates the subscription is receiving events.
+  WEBHOOK_STATUS_ACTIVE = 1;
+  // WEBHOOK_STATUS_DISABLED indicates the subscription is paused.
+  WEBHOOK_STATUS_DISABLED = 2;
+}
+
+// ProviderCapability describes a capability a platform may support.
+enum ProviderCapability {
+  // PROVIDER_CAPABILITY_UNSPECIFIED is the default value and is not a valid
+  // state.
+  PROVIDER_CAPABILITY_UNSPECIFIED = 0;
+  // PROVIDER_CAPABILITY_OAUTH indicates the platform supports OAuth
+  // connections.
+  PROVIDER_CAPABILITY_OAUTH = 1;
+  // PROVIDER_CAPABILITY_WEBHOOK indicates the platform supports webhook
+  // delivery.
+  PROVIDER_CAPABILITY_WEBHOOK = 2;
+}
+
+// PaginationRequest carries pagination parameters for list operations.
+message PaginationRequest {
+  // page_size is the maximum number of items to return.
+  int32 page_size = 1;
+  // page_token is an opaque cursor for the next page of results.
+  string page_token = 2;
+}
+
+// PaginationResponse carries pagination metadata for list responses.
+message PaginationResponse {
+  // next_page_token is an opaque cursor for the next page, empty when no more
+  // pages exist.
+  string next_page_token = 1;
+  // total_count is the total number of items matching the query.
+  int64 total_count = 2;
+}
+
+// Error describes a structured error returned by an RPC.
+message Error {
+  // code is a stable machine-readable error code.
+  string code = 1;
+  // message is a human-readable description of the error.
+  string message = 2;
+  // details carries additional structured error context.
+  repeated string details = 3;
+}
+
+// Metadata carries arbitrary key-value metadata for a resource.
+message Metadata {
+  // entries is a list of key-value pairs.
+  repeated MetadataEntry entries = 1;
+}
+
+// MetadataEntry is a single key-value pair.
+message MetadataEntry {
+  // key is the metadata key.
+  string key = 1;
+  // value is the metadata value.
+  string value = 2;
+}
+
+// AuditInformation captures who and when a resource was created or modified.
+message AuditInformation {
+  // created_at is the time the resource was created.
+  google.protobuf.Timestamp created_at = 1;
+  // updated_at is the time the resource was last modified.
+  google.protobuf.Timestamp updated_at = 2;
+}
+
+// HealthStatus describes the health of a service or dependency.
+message HealthStatus {
+  // status is a human-readable health summary.
+  string status = 1;
+  // last_checked_at is the time the health was last evaluated.
+  google.protobuf.Timestamp last_checked_at = 2;
+}
