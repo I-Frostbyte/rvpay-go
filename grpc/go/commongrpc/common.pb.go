@@ -30,11 +30,14 @@ const (
 	ClientStatus_CLIENT_STATUS_UNSPECIFIED ClientStatus = 0
 	// CLIENT_STATUS_REGISTERED indicates the client record has been created.
 	ClientStatus_CLIENT_STATUS_REGISTERED ClientStatus = 1
-	// CLIENT_STATUS_ACTIVE indicates the client can create integrations and transact.
+	// CLIENT_STATUS_ACTIVE indicates the client can create integrations and
+	// transact.
 	ClientStatus_CLIENT_STATUS_ACTIVE ClientStatus = 2
-	// CLIENT_STATUS_SUSPENDED indicates the client cannot transact; records are preserved.
+	// CLIENT_STATUS_SUSPENDED indicates the client cannot transact; records are
+	// preserved.
 	ClientStatus_CLIENT_STATUS_SUSPENDED ClientStatus = 3
-	// CLIENT_STATUS_CLOSED indicates the client is deactivated; records are retained for audit.
+	// CLIENT_STATUS_CLOSED indicates the client is deactivated; records are
+	// retained for audit.
 	ClientStatus_CLIENT_STATUS_CLOSED ClientStatus = 4
 )
 
@@ -91,7 +94,8 @@ const (
 	PlatformStatus_PLATFORM_STATUS_UNSPECIFIED PlatformStatus = 0
 	// PLATFORM_STATUS_ACTIVE indicates the platform can host integrations.
 	PlatformStatus_PLATFORM_STATUS_ACTIVE PlatformStatus = 1
-	// PLATFORM_STATUS_DISABLED indicates the platform no longer accepts new integrations.
+	// PLATFORM_STATUS_DISABLED indicates the platform no longer accepts new
+	// integrations.
 	PlatformStatus_PLATFORM_STATUS_DISABLED PlatformStatus = 2
 )
 
@@ -136,19 +140,25 @@ func (PlatformStatus) EnumDescriptor() ([]byte, []int) {
 	return file_common_proto_rawDescGZIP(), []int{1}
 }
 
-// IntegrationStatus represents the lifecycle state of a client-platform integration.
+// IntegrationStatus represents the lifecycle state of a client-platform
+// integration.
 type IntegrationStatus int32
 
 const (
-	// INTEGRATION_STATUS_UNSPECIFIED is the default value and is not a valid state.
+	// INTEGRATION_STATUS_UNSPECIFIED is the default value and is not a valid
+	// state.
 	IntegrationStatus_INTEGRATION_STATUS_UNSPECIFIED IntegrationStatus = 0
-	// INTEGRATION_STATUS_CREATED indicates the integration record has been created.
+	// INTEGRATION_STATUS_CREATED indicates the integration record has been
+	// created.
 	IntegrationStatus_INTEGRATION_STATUS_CREATED IntegrationStatus = 1
-	// INTEGRATION_STATUS_OAUTH_PENDING indicates the OAuth handshake is in progress.
+	// INTEGRATION_STATUS_OAUTH_PENDING indicates the OAuth handshake is in
+	// progress.
 	IntegrationStatus_INTEGRATION_STATUS_OAUTH_PENDING IntegrationStatus = 2
-	// INTEGRATION_STATUS_ACTIVE indicates OAuth is complete and the integration is live.
+	// INTEGRATION_STATUS_ACTIVE indicates OAuth is complete and the integration
+	// is live.
 	IntegrationStatus_INTEGRATION_STATUS_ACTIVE IntegrationStatus = 3
-	// INTEGRATION_STATUS_REVOKED indicates the client disconnected the integration.
+	// INTEGRATION_STATUS_REVOKED indicates the client disconnected the
+	// integration.
 	IntegrationStatus_INTEGRATION_STATUS_REVOKED IntegrationStatus = 4
 )
 
@@ -315,11 +325,14 @@ func (WebhookStatus) EnumDescriptor() ([]byte, []int) {
 type ProviderCapability int32
 
 const (
-	// PROVIDER_CAPABILITY_UNSPECIFIED is the default value and is not a valid state.
+	// PROVIDER_CAPABILITY_UNSPECIFIED is the default value and is not a valid
+	// state.
 	ProviderCapability_PROVIDER_CAPABILITY_UNSPECIFIED ProviderCapability = 0
-	// PROVIDER_CAPABILITY_OAUTH indicates the platform supports OAuth connections.
+	// PROVIDER_CAPABILITY_OAUTH indicates the platform supports OAuth
+	// connections.
 	ProviderCapability_PROVIDER_CAPABILITY_OAUTH ProviderCapability = 1
-	// PROVIDER_CAPABILITY_WEBHOOK indicates the platform supports webhook delivery.
+	// PROVIDER_CAPABILITY_WEBHOOK indicates the platform supports webhook
+	// delivery.
 	ProviderCapability_PROVIDER_CAPABILITY_WEBHOOK ProviderCapability = 2
 )
 
@@ -422,7 +435,8 @@ func (x *PaginationRequest) GetPageToken() string {
 // PaginationResponse carries pagination metadata for list responses.
 type PaginationResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// next_page_token is an opaque cursor for the next page, empty when no more pages exist.
+	// next_page_token is an opaque cursor for the next page, empty when no more
+	// pages exist.
 	NextPageToken string `protobuf:"bytes,1,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
 	// total_count is the total number of items matching the query.
 	TotalCount    int64 `protobuf:"varint,2,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`

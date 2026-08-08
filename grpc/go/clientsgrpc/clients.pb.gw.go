@@ -751,6 +751,76 @@ func local_request_IntegrationsService_ListIntegrations_0(ctx context.Context, m
 
 }
 
+var (
+	filter_IntegrationsService_ListIntegrations_1 = &utilities.DoubleArray{Encoding: map[string]int{"client_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+)
+
+func request_IntegrationsService_ListIntegrations_1(ctx context.Context, marshaler runtime.Marshaler, client IntegrationsServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq ListIntegrationsRequest
+	var metadata runtime.ServerMetadata
+
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["client_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "client_id")
+	}
+
+	protoReq.ClientId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "client_id", err)
+	}
+
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IntegrationsService_ListIntegrations_1); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := client.ListIntegrations(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_IntegrationsService_ListIntegrations_1(ctx context.Context, marshaler runtime.Marshaler, server IntegrationsServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq ListIntegrationsRequest
+	var metadata runtime.ServerMetadata
+
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["client_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "client_id")
+	}
+
+	protoReq.ClientId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "client_id", err)
+	}
+
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IntegrationsService_ListIntegrations_1); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := server.ListIntegrations(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
 func request_IntegrationsService_ReconnectIntegration_0(ctx context.Context, marshaler runtime.Marshaler, client IntegrationsServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq ReconnectIntegrationRequest
 	var metadata runtime.ServerMetadata
@@ -1330,6 +1400,31 @@ func RegisterIntegrationsServiceHandlerServer(ctx context.Context, mux *runtime.
 		}
 
 		forward_IntegrationsService_ListIntegrations_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("GET", pattern_IntegrationsService_ListIntegrations_1, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		var err error
+		var annotatedContext context.Context
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/clientsgrpc.IntegrationsService/ListIntegrations", runtime.WithHTTPPathPattern("/v1/public/clients/{client_id}/integrations"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_IntegrationsService_ListIntegrations_1(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_IntegrationsService_ListIntegrations_1(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -1913,6 +2008,28 @@ func RegisterIntegrationsServiceHandlerClient(ctx context.Context, mux *runtime.
 
 	})
 
+	mux.Handle("GET", pattern_IntegrationsService_ListIntegrations_1, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		var err error
+		var annotatedContext context.Context
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/clientsgrpc.IntegrationsService/ListIntegrations", runtime.WithHTTPPathPattern("/v1/public/clients/{client_id}/integrations"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_IntegrationsService_ListIntegrations_1(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_IntegrationsService_ListIntegrations_1(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	mux.Handle("POST", pattern_IntegrationsService_ReconnectIntegration_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -1991,6 +2108,8 @@ var (
 
 	pattern_IntegrationsService_ListIntegrations_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "public", "integrations"}, ""))
 
+	pattern_IntegrationsService_ListIntegrations_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "public", "clients", "client_id", "integrations"}, ""))
+
 	pattern_IntegrationsService_ReconnectIntegration_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "public", "integrations", "id"}, "reconnect"))
 
 	pattern_IntegrationsService_DisconnectIntegration_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "public", "integrations", "id"}, "disconnect"))
@@ -2006,6 +2125,8 @@ var (
 	forward_IntegrationsService_GetIntegration_0 = runtime.ForwardResponseMessage
 
 	forward_IntegrationsService_ListIntegrations_0 = runtime.ForwardResponseMessage
+
+	forward_IntegrationsService_ListIntegrations_1 = runtime.ForwardResponseMessage
 
 	forward_IntegrationsService_ReconnectIntegration_0 = runtime.ForwardResponseMessage
 
