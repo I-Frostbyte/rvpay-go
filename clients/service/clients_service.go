@@ -7,16 +7,18 @@ import (
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/clients/db/sqlc"
 	clientsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/clientsgrpc"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 type ClientsServiceImpl struct {
 	clientsRepo repo.ClientRepo
-	logger      Logger
+	logger      zerolog.Logger
+	clientsgrpc.UnimplementedClientsServiceServer
 }
 
-func NewClientsServiceImpl(clientsRepo repo.ClientRepo, logger Logger) *ClientsServiceImpl {
+func NewClientsServiceImpl(clientsRepo repo.ClientRepo, logger zerolog.Logger) *ClientsServiceImpl {
 	return &ClientsServiceImpl{
 		clientsRepo: clientsRepo,
 		logger:      logger,
@@ -41,7 +43,7 @@ func (s *ClientsServiceImpl) CreateClient(ctx context.Context, req *clientsgrpc.
 		return nil, translateRepoError(err)
 	}
 
-	s.logger.Info("client created", "client_id", client.ID, "name", client.ClientName)
+	s.logger.Info().Str("client_id", client.ID.String()).Str("name", client.ClientName).Msg("client created")
 
 	return &clientsgrpc.CreateClientResponse{
 		Client: sqlcClientToProto(client),
@@ -117,7 +119,7 @@ func (s *ClientsServiceImpl) UpdateClient(ctx context.Context, req *clientsgrpc.
 		return nil, translateRepoError(err)
 	}
 
-	s.logger.Info("client updated", "client_id", updated.ID, "name", updated.ClientName)
+	s.logger.Info().Str("client_id", updated.ID.String()).Str("name", updated.ClientName).Msg("client updated")
 
 	return &clientsgrpc.UpdateClientResponse{
 		Client: sqlcClientToProto(updated),
@@ -147,7 +149,7 @@ func (s *ClientsServiceImpl) DeleteClient(ctx context.Context, req *clientsgrpc.
 		return nil, translateRepoError(err)
 	}
 
-	s.logger.Info("client deleted", "client_id", id)
+	s.logger.Info().Str("client_id", id.String()).Msg("client deleted")
 
 	return &clientsgrpc.DeleteClientResponse{
 		Id: id.String(),
@@ -179,7 +181,7 @@ func (s *ClientsServiceImpl) ActivateClient(ctx context.Context, req *clientsgrp
 		return nil, translateRepoError(err)
 	}
 
-	s.logger.Info("client activated", "client_id", updated.ID)
+	s.logger.Info().Str("client_id", updated.ID.String()).Msg("client activated")
 
 	return &clientsgrpc.ActivateClientResponse{
 		Client: sqlcClientToProto(updated),
@@ -211,13 +213,10 @@ func (s *ClientsServiceImpl) DeactivateClient(ctx context.Context, req *clientsg
 		return nil, translateRepoError(err)
 	}
 
-	s.logger.Info("client deactivated", "client_id", updated.ID)
+	s.logger.Info().Str("client_id", updated.ID.String()).Msg("client deactivated")
 
 	return &clientsgrpc.DeactivateClientResponse{
 		Client: sqlcClientToProto(updated),
 	}, nil
 }
 
-type Logger interface {
-	Info(msg string, args ...interface{})
-}

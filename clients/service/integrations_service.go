@@ -7,6 +7,7 @@ import (
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/clients/db/sqlc"
 	clientsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/clientsgrpc"
+	"github.com/rs/zerolog"
 	"github.com/google/uuid"
 )
 
@@ -16,7 +17,8 @@ type IntegrationsServiceImpl struct {
 	platformsRepo    repo.PlatformRepo
 	oauthRepo        repo.OAuthTokenRepo
 	webhookRepo      repo.WebhookSubscriptionRepo
-	logger           Logger
+	logger           zerolog.Logger
+	clientsgrpc.UnimplementedIntegrationsServiceServer
 }
 
 func NewIntegrationsServiceImpl(
@@ -25,7 +27,7 @@ func NewIntegrationsServiceImpl(
 	platformsRepo repo.PlatformRepo,
 	oauthRepo repo.OAuthTokenRepo,
 	webhookRepo repo.WebhookSubscriptionRepo,
-	logger Logger,
+	logger zerolog.Logger,
 ) *IntegrationsServiceImpl {
 	return &IntegrationsServiceImpl{
 		integrationsRepo: integrationsRepo,
@@ -84,7 +86,7 @@ func (s *IntegrationsServiceImpl) InstallIntegration(ctx context.Context, req *c
 		return nil, translateRepoError(err)
 	}
 
-	s.logger.Info("integration installed", "integration_id", integration.ID, "client_id", clientID, "platform_id", platformID)
+	s.logger.Info().Str("integration_id", integration.ID.String()).Str("client_id", clientID.String()).Str("platform_id", platformID.String()).Msg("integration installed")
 
 	return &clientsgrpc.InstallIntegrationResponse{
 		Integration: sqlcIntegrationToProto(integration),
@@ -117,7 +119,7 @@ func (s *IntegrationsServiceImpl) UninstallIntegration(ctx context.Context, req 
 		return nil, translateRepoError(err)
 	}
 
-	s.logger.Info("integration uninstalled", "integration_id", id)
+	s.logger.Info().Str("integration_id", id.String()).Msg("integration uninstalled")
 
 	return &clientsgrpc.UninstallIntegrationResponse{
 		Id: id.String(),
@@ -201,7 +203,7 @@ func (s *IntegrationsServiceImpl) ReconnectIntegration(ctx context.Context, req 
 		return nil, translateRepoError(err)
 	}
 
-	s.logger.Info("integration reconnected", "integration_id", updated.ID)
+	s.logger.Info().Str("integration_id", updated.ID.String()).Msg("integration reconnected")
 
 	return &clientsgrpc.ReconnectIntegrationResponse{
 		Integration: sqlcIntegrationToProto(updated),
@@ -227,7 +229,7 @@ func (s *IntegrationsServiceImpl) DisconnectIntegration(ctx context.Context, req
 		return nil, translateRepoError(err)
 	}
 
-	s.logger.Info("integration disconnected", "integration_id", updated.ID)
+	s.logger.Info().Str("integration_id", updated.ID.String()).Msg("integration disconnected")
 
 	return &clientsgrpc.DisconnectIntegrationResponse{
 		Integration: sqlcIntegrationToProto(updated),
@@ -257,7 +259,7 @@ func (s *IntegrationsServiceImpl) SyncIntegration(ctx context.Context, req *clie
 		return nil, translateRepoError(err)
 	}
 
-	s.logger.Info("integration synced", "integration_id", updated.ID)
+	s.logger.Info().Str("integration_id", updated.ID.String()).Msg("integration synced")
 
 	return &clientsgrpc.SyncIntegrationResponse{
 		Integration: sqlcIntegrationToProto(updated),

@@ -7,6 +7,7 @@ import (
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/clients/db/sqlc"
 	"github.com/I-Frostbyte/rvpay-go/clients/providers"
+	"github.com/rs/zerolog"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -17,13 +18,7 @@ type Service struct {
 	webhookRepo      repo.WebhookSubscriptionRepo
 	platformsRepo    repo.PlatformRepo
 	registry         providers.ProviderRegistry
-	logger           Logger
-}
-
-// Logger defines the logging interface.
-type Logger interface {
-	Info(msg string, args ...interface{})
-	Error(msg string, args ...interface{})
+	logger           zerolog.Logger
 }
 
 // NewService creates a new webhook service.
@@ -32,7 +27,7 @@ func NewService(
 	webhookRepo repo.WebhookSubscriptionRepo,
 	platformsRepo repo.PlatformRepo,
 	registry providers.ProviderRegistry,
-	logger Logger,
+	logger zerolog.Logger,
 ) *Service {
 	return &Service{
 		integrationsRepo: integrationsRepo,
@@ -85,7 +80,7 @@ func (s *Service) RegisterWebhook(ctx context.Context, integrationID uuid.UUID, 
 		return translateError(err)
 	}
 
-	s.logger.Info("Webhook registered", "integration_id", integrationID, "callback_url", callbackURL)
+	s.logger.Info().Str("integration_id", integrationID.String()).Str("callback_url", callbackURL).Msg("Webhook registered")
 
 	return nil
 }
@@ -136,7 +131,7 @@ func (s *Service) UnregisterWebhook(ctx context.Context, integrationID uuid.UUID
 		return translateError(err)
 	}
 
-	s.logger.Info("Webhook unregistered", "integration_id", integrationID)
+	s.logger.Info().Str("integration_id", integrationID.String()).Msg("Webhook unregistered")
 
 	return nil
 }
@@ -155,13 +150,13 @@ func (s *Service) ProcessWebhook(ctx context.Context, providerID string, headers
 
 	err := webhookProvider.VerifyRequest(ctx, headers, body)
 	if err != nil {
-		s.logger.Error("Webhook verification failed", "error", err, "provider", providerID)
+		s.logger.Error().Err(err).Str("provider", providerID).Msg("Webhook verification failed")
 		return ErrInvalidSignature
 	}
 
 	event, err := webhookProvider.ParseEvent(ctx, body)
 	if err != nil {
-		s.logger.Error("Webhook payload parsing failed", "error", err, "provider", providerID)
+		s.logger.Error().Err(err).Str("provider", providerID).Msg("Webhook payload parsing failed")
 		return ErrInvalidPayload
 	}
 
@@ -180,7 +175,7 @@ func (s *Service) ProcessWebhook(ctx context.Context, providerID string, headers
 
 	// Duplicate detection: if webhook exists, log and continue
 	// In production, this would check a webhook_events table for provider_event_id
-	s.logger.Info("Webhook subscription exists, processing event", "event_id", event.ProviderEventID, "integration_id", integrationID)
+	s.logger.Info().Str("event_id", event.ProviderEventID).Str("integration_id", integrationID.String()).Msg("Webhook subscription exists, processing event")
 
 	lastDelivery := pgtype.Timestamptz{Time: time.Now(), Valid: true}
 	_, err = s.webhookRepo.UpdateLastDelivery(ctx, webhook.ID, lastDelivery)
@@ -192,12 +187,12 @@ func (s *Service) ProcessWebhook(ctx context.Context, providerID string, headers
 	if ok {
 		err = dispatcher.Dispatch(ctx, event)
 		if err != nil {
-			s.logger.Error("Webhook event dispatch failed", "error", err, "event_id", event.ProviderEventID)
+			s.logger.Error().Err(err).Str("event_id", event.ProviderEventID).Msg("Webhook event dispatch failed")
 			return err
 		}
 	}
 
-	s.logger.Info("Webhook processed successfully", "provider", providerID, "event_type", event.EventType, "event_id", event.ProviderEventID)
+	s.logger.Info().Str("provider", providerID).Str("event_type", event.EventType).Str("event_id", event.ProviderEventID).Msg("Webhook processed successfully")
 
 	return nil
 }

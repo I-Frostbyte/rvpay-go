@@ -8,6 +8,7 @@ import (
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/clients/db/sqlc"
 	"github.com/I-Frostbyte/rvpay-go/clients/providers"
+	"github.com/rs/zerolog"
 	"github.com/google/uuid"
 )
 
@@ -18,13 +19,7 @@ type Service struct {
 	clientsRepo      repo.ClientRepo
 	platformsRepo    repo.PlatformRepo
 	registry         providers.ProviderRegistry
-	logger           Logger
-}
-
-// Logger defines the logging interface.
-type Logger interface {
-	Info(msg string, args ...interface{})
-	Error(msg string, args ...interface{})
+	logger           zerolog.Logger
 }
 
 // NewService creates a new OAuth service.
@@ -34,7 +29,7 @@ func NewService(
 	clientsRepo repo.ClientRepo,
 	platformsRepo repo.PlatformRepo,
 	registry providers.ProviderRegistry,
-	logger Logger,
+	logger zerolog.Logger,
 ) *Service {
 	return &Service{
 		integrationsRepo: integrationsRepo,
@@ -71,7 +66,7 @@ func (s *Service) AuthorizationURL(ctx context.Context, clientID, platformID uui
 		return "", err
 	}
 
-	s.logger.Info("OAuth authorization URL generated", "client_id", clientID, "platform_id", platformID, "provider", provider.ID())
+	s.logger.Info().Str("client_id", clientID.String()).Str("platform_id", platformID.String()).Str("provider", provider.ID()).Msg("OAuth authorization URL generated")
 
 	return authURL, nil
 }
@@ -122,13 +117,13 @@ func (s *Service) ProcessCallback(ctx context.Context, clientID, platformID uuid
 	redirectURI := "https://api.rvpay.com/v1/public/oauth/callback"
 	tokenResp, err := provider.OAuthProvider().ExchangeCode(ctx, code, redirectURI)
 	if err != nil {
-		s.logger.Error("OAuth token exchange failed", "error", err, "client_id", clientID, "platform_id", platformID)
+		s.logger.Error().Err(err).Str("client_id", clientID.String()).Str("platform_id", platformID.String()).Msg("OAuth token exchange failed")
 		return nil, ErrTokenExchangeFailed
 	}
 
 	providerUserID, err := provider.OAuthProvider().GetUserInfo(ctx, tokenResp.AccessToken)
 	if err != nil {
-		s.logger.Error("OAuth user info retrieval failed", "error", err, "client_id", clientID, "platform_id", platformID)
+		s.logger.Error().Err(err).Str("client_id", clientID.String()).Str("platform_id", platformID.String()).Msg("OAuth user info retrieval failed")
 		return nil, ErrUserInfoFailed
 	}
 
@@ -148,11 +143,11 @@ func (s *Service) ProcessCallback(ctx context.Context, clientID, platformID uuid
 	expiresAt := time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
 	_, err = s.oauthRepo.Create(ctx, integration.ID, tokenResp.AccessToken, tokenResp.RefreshToken, expiresAt, tokenResp.Scope, tokenResp.TokenType)
 	if err != nil {
-		s.logger.Error("OAuth token persistence failed", "error", err, "integration_id", integration.ID)
+		s.logger.Error().Err(err).Str("integration_id", integration.ID.String()).Msg("OAuth token persistence failed")
 		return nil, translateError(err)
 	}
 
-	s.logger.Info("OAuth callback processed successfully", "integration_id", integration.ID, "client_id", clientID, "platform_id", platformID, "provider_user_id", providerUserID)
+	s.logger.Info().Str("integration_id", integration.ID.String()).Str("client_id", clientID.String()).Str("platform_id", platformID.String()).Str("provider_user_id", providerUserID).Msg("OAuth callback processed successfully")
 
 	return &CallbackResult{
 		IntegrationID: integration.ID,
@@ -203,7 +198,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, integrationID uuid.UUI
 
 	tokenResp, err := provider.OAuthProvider().RefreshToken(ctx, oauthToken.RefreshToken)
 	if err != nil {
-		s.logger.Error("OAuth token refresh failed", "error", err, "integration_id", integrationID)
+		s.logger.Error().Err(err).Str("integration_id", integrationID.String()).Msg("OAuth token refresh failed")
 		return ErrTokenRefreshFailed
 	}
 
@@ -213,7 +208,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, integrationID uuid.UUI
 		return translateError(err)
 	}
 
-	s.logger.Info("OAuth token refreshed", "integration_id", integrationID)
+	s.logger.Info().Str("integration_id", integrationID.String()).Msg("OAuth token refreshed")
 
 	return nil
 }
@@ -264,4 +259,3 @@ func (s *Service) ValidateToken(ctx context.Context, integrationID uuid.UUID) (b
 
 	return valid, nil
 }
-

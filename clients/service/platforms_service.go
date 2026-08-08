@@ -5,14 +5,16 @@ import (
 
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
 	clientsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/clientsgrpc"
+	"github.com/rs/zerolog"
 )
 
 type PlatformsServiceImpl struct {
 	platformsRepo repo.PlatformRepo
-	logger        Logger
+	logger        zerolog.Logger
+	clientsgrpc.UnimplementedPlatformsServiceServer
 }
 
-func NewPlatformsServiceImpl(platformsRepo repo.PlatformRepo, logger Logger) *PlatformsServiceImpl {
+func NewPlatformsServiceImpl(platformsRepo repo.PlatformRepo, logger zerolog.Logger) *PlatformsServiceImpl {
 	return &PlatformsServiceImpl{
 		platformsRepo: platformsRepo,
 		logger:        logger,
@@ -90,7 +92,7 @@ func (s *PlatformsServiceImpl) EnablePlatform(ctx context.Context, req *clientsg
 		return nil, translateRepoError(err)
 	}
 
-	s.logger.Info("platform enabled", "platform_id", updated.ID)
+	s.logger.Info().Str("platform_id", updated.ID.String()).Msg("platform enabled")
 
 	return &clientsgrpc.EnablePlatformResponse{
 		Platform: sqlcPlatformToProto(updated),
@@ -122,7 +124,7 @@ func (s *PlatformsServiceImpl) DisablePlatform(ctx context.Context, req *clients
 		return nil, translateRepoError(err)
 	}
 
-	s.logger.Info("platform disabled", "platform_id", updated.ID)
+	s.logger.Info().Str("platform_id", updated.ID.String()).Msg("platform disabled")
 
 	return &clientsgrpc.DisablePlatformResponse{
 		Platform: sqlcPlatformToProto(updated),
