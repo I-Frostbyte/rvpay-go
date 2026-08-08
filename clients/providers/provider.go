@@ -1,7 +1,17 @@
 package providers
 
-import (
-	"context"
+import "context"
+
+// Capability represents a provider capability.
+type Capability string
+
+const (
+	CapabilityOAuth          Capability = "oauth"
+	CapabilityWebhooks       Capability = "webhooks"
+	CapabilityTokenRefresh   Capability = "token_refresh"
+	CapabilityInstallation   Capability = "installation"
+	CapabilityUninstallation Capability = "uninstallation"
+	CapabilityHealthCheck    Capability = "health_check"
 )
 
 // Provider represents a marketplace platform provider.
@@ -10,8 +20,14 @@ type Provider interface {
 	ID() string
 	// Name returns the human-readable provider name.
 	Name() string
+	// Capabilities returns the list of capabilities this provider supports.
+	Capabilities() []Capability
+	// HasCapability checks if the provider supports a specific capability.
+	HasCapability(capability Capability) bool
 	// OAuthProvider returns the OAuth implementation for this provider.
 	OAuthProvider() OAuthProvider
+	// WebhookProvider returns the webhook implementation for this provider.
+	WebhookProvider() WebhookProvider
 }
 
 // OAuthProvider defines the OAuth lifecycle for a provider.
@@ -45,4 +61,6 @@ type ProviderRegistry interface {
 	Get(id string) (Provider, bool)
 	// List returns all registered providers.
 	List() []Provider
+	// GetByCapability returns all providers that support a specific capability.
+	GetByCapability(capability Capability) []Provider
 }

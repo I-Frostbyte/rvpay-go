@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// HighLevelProvider implements the OAuthProvider interface for HighLevel.
+// HighLevelProvider implements the unified Provider interface for HighLevel.
 type HighLevelProvider struct {
 	clientID     string
 	clientSecret string
@@ -24,7 +24,7 @@ type HighLevelProvider struct {
 	scopes       []string
 }
 
-// NewHighLevelProvider creates a new HighLevel OAuth provider.
+// NewHighLevelProvider creates a new HighLevel provider.
 func NewHighLevelProvider(clientID, clientSecret, redirectURI string) *HighLevelProvider {
 	return &HighLevelProvider{
 		clientID:     clientID,
@@ -45,8 +45,31 @@ func (p *HighLevelProvider) Name() string {
 	return "HighLevel"
 }
 
+func (p *HighLevelProvider) Capabilities() []Capability {
+	return []Capability{
+		CapabilityOAuth,
+		CapabilityWebhooks,
+		CapabilityTokenRefresh,
+		CapabilityInstallation,
+		CapabilityUninstallation,
+	}
+}
+
+func (p *HighLevelProvider) HasCapability(capability Capability) bool {
+	switch capability {
+	case CapabilityOAuth, CapabilityWebhooks, CapabilityTokenRefresh, CapabilityInstallation, CapabilityUninstallation:
+		return true
+	default:
+		return false
+	}
+}
+
 func (p *HighLevelProvider) OAuthProvider() OAuthProvider {
 	return p
+}
+
+func (p *HighLevelProvider) WebhookProvider() WebhookProvider {
+	return &HighLevelWebhookProvider{webhookSecret: p.clientSecret}
 }
 
 func (p *HighLevelProvider) GenerateAuthorizationURL(ctx context.Context, state string, redirectURI string) (string, error) {
@@ -216,5 +239,3 @@ func GenerateState() (string, error) {
 	}
 	return hex.EncodeToString(buf), nil
 }
-
-// ToOAuth2Config is intentionally omitted to avoid external oauth2 dependency.

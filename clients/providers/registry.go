@@ -39,3 +39,15 @@ func (r *providerRegistry) List() []Provider {
 	}
 	return providers
 }
+
+func (r *providerRegistry) GetByCapability(capability Capability) []Provider {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var matching []Provider
+	for _, p := range r.providers {
+		if p.HasCapability(capability) {
+			matching = append(matching, p)
+		}
+	}
+	return matching
+}
