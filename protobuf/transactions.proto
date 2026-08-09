@@ -1,0 +1,379 @@
+syntax = "proto3";
+
+package transactionsgrpc;
+
+option go_package = "github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpc";
+
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+import "common.proto";
+
+// MerchantStatus represents the lifecycle state of a payment gateway.
+enum MerchantStatus {
+  // MERCHANT_STATUS_UNSPECIFIED is the default value and is not a valid state.
+  MERCHANT_STATUS_UNSPECIFIED = 0;
+  // MERCHANT_STATUS_ONBOARDED indicates the merchant has been registered.
+  MERCHANT_STATUS_ONBOARDED = 1;
+  // MERCHANT_STATUS_ACTIVE indicates the merchant can process payments.
+  MERCHANT_STATUS_ACTIVE = 2;
+  // MERCHANT_STATUS_SUSPENDED indicates the merchant cannot process new
+  // payments; in-flight payments continue.
+  MERCHANT_STATUS_SUSPENDED = 3;
+  // MERCHANT_STATUS_RETIRED indicates the merchant is decommissioned;
+  // historical records remain.
+  MERCHANT_STATUS_RETIRED = 4;
+}
+
+// CustomerStatus represents the lifecycle state of a customer.
+enum CustomerStatus {
+  // CUSTOMER_STATUS_UNSPECIFIED is the default value and is not a valid state.
+  CUSTOMER_STATUS_UNSPECIFIED = 0;
+  // CUSTOMER_STATUS_CREATED indicates the customer record has been created.
+  CUSTOMER_STATUS_CREATED = 1;
+  // CUSTOMER_STATUS_ACTIVE indicates the customer can continue initiating
+  // payments.
+  CUSTOMER_STATUS_ACTIVE = 2;
+}
+
+// DepositStatus represents the lifecycle state of a deposit.
+enum DepositStatus {
+  // DEPOSIT_STATUS_UNSPECIFIED is the default value and is not a valid state.
+  DEPOSIT_STATUS_UNSPECIFIED = 0;
+  // DEPOSIT_STATUS_INITIATED indicates the deposit request has been accepted.
+  DEPOSIT_STATUS_INITIATED = 1;
+  // DEPOSIT_STATUS_PROCESSING indicates the merchant is processing the
+  // payment.
+  DEPOSIT_STATUS_PROCESSING = 2;
+  // DEPOSIT_STATUS_COMPLETED indicates funds have been credited to the
+  // merchant wallet.
+  DEPOSIT_STATUS_COMPLETED = 3;
+  // DEPOSIT_STATUS_FAILED indicates the payment could not be completed.
+  DEPOSIT_STATUS_FAILED = 4;
+}
+
+// PayoutStatus represents the lifecycle state of a payout.
+enum PayoutStatus {
+  // PAYOUT_STATUS_UNSPECIFIED is the default value and is not a valid state.
+  PAYOUT_STATUS_UNSPECIFIED = 0;
+  // PAYOUT_STATUS_REQUESTED indicates the payout has been requested.
+  PAYOUT_STATUS_REQUESTED = 1;
+  // PAYOUT_STATUS_PROCESSING indicates the merchant is processing the payout.
+  PAYOUT_STATUS_PROCESSING = 2;
+  // PAYOUT_STATUS_COMPLETED indicates funds have been transferred to the
+  // client.
+  PAYOUT_STATUS_COMPLETED = 3;
+  // PAYOUT_STATUS_FAILED indicates the payout could not be completed.
+  PAYOUT_STATUS_FAILED = 4;
+}
+
+// Merchant represents a payment gateway.
+message Merchant {
+  // id is the stable public identifier of the merchant.
+  string id = 1;
+  // name is the merchant display name.
+  string name = 2;
+  // slug is a stable URL-friendly identifier.
+  string slug = 3;
+  // status is the merchant lifecycle state.
+  MerchantStatus status = 4;
+  // created_at is the time the merchant was created.
+  google.protobuf.Timestamp created_at = 5;
+  // updated_at is the time the merchant was last modified.
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+// Customer represents an end user making payments.
+message Customer {
+  // id is the stable public identifier of the customer.
+  string id = 1;
+  // client_id references the RVPay client record.
+  string client_id = 2;
+  // merchant_id references the payment gateway serving this customer.
+  string merchant_id = 3;
+  // phone_number is the customer's payment phone number.
+  string phone_number = 4;
+  // status is the customer lifecycle state.
+  CustomerStatus status = 5;
+  // created_at is the time the customer was created.
+  google.protobuf.Timestamp created_at = 6;
+  // updated_at is the time the customer was last modified.
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+// Deposit represents an inbound customer payment.
+message Deposit {
+  // id is the stable public identifier of the deposit.
+  string id = 1;
+  // client_id references the RVPay client record.
+  string client_id = 2;
+  // customer_id references the paying customer.
+  string customer_id = 3;
+  // merchant_id references the processing merchant.
+  string merchant_id = 4;
+  // amount is the deposit amount and currency.
+  commongrpc.Money amount = 5;
+  // payment_type identifies the payment method.
+  commongrpc.PaymentType payment_type = 6;
+  // payer_phone_number is the payer's phone number.
+  string payer_phone_number = 7;
+  // provider identifies the payment provider.
+  commongrpc.Provider provider = 8;
+  // status is the deposit lifecycle state.
+  DepositStatus status = 9;
+  // external_reference is the provider's reference for this deposit.
+  string external_reference = 10;
+  // initiated_at is the time the deposit was initiated.
+  google.protobuf.Timestamp initiated_at = 11;
+  // completed_at is the time the deposit completed.
+  google.protobuf.Timestamp completed_at = 12;
+  // failed_at is the time the deposit failed.
+  google.protobuf.Timestamp failed_at = 13;
+  // failure_reason describes why the deposit failed.
+  string failure_reason = 14;
+  // created_at is the time the deposit was created.
+  google.protobuf.Timestamp created_at = 15;
+  // updated_at is the time the deposit was last modified.
+  google.protobuf.Timestamp updated_at = 16;
+}
+
+// Payout represents an outbound settlement.
+message Payout {
+  // id is the stable public identifier of the payout.
+  string id = 1;
+  // client_id references the RVPay client record.
+  string client_id = 2;
+  // merchant_id references the processing merchant.
+  string merchant_id = 3;
+  // amount is the payout amount and currency.
+  commongrpc.Money amount = 4;
+  // provider identifies the payment provider.
+  commongrpc.Provider provider = 5;
+  // destination_reference is the destination account reference.
+  string destination_reference = 6;
+  // status is the payout lifecycle state.
+  PayoutStatus status = 7;
+  // external_reference is the provider's reference for this payout.
+  string external_reference = 8;
+  // requested_at is the time the payout was requested.
+  google.protobuf.Timestamp requested_at = 9;
+  // completed_at is the time the payout completed.
+  google.protobuf.Timestamp completed_at = 10;
+  // failed_at is the time the payout failed.
+  google.protobuf.Timestamp failed_at = 11;
+  // failure_reason describes why the payout failed.
+  string failure_reason = 12;
+  // created_at is the time the payout was created.
+  google.protobuf.Timestamp created_at = 13;
+  // updated_at is the time the payout was last modified.
+  google.protobuf.Timestamp updated_at = 14;
+}
+
+// CreateMerchantRequest creates a merchant.
+message CreateMerchantRequest {
+  // name is the merchant display name.
+  string name = 1;
+  // slug is a stable URL-friendly identifier.
+  string slug = 2;
+}
+
+// CreateMerchantResponse returns the created merchant.
+message CreateMerchantResponse {
+  // merchant is the created merchant.
+  Merchant merchant = 1;
+}
+
+// GetMerchantRequest fetches a merchant by id.
+message GetMerchantRequest {
+  // merchant_id is the stable public identifier of the merchant.
+  string merchant_id = 1;
+}
+
+// GetMerchantResponse returns the requested merchant.
+message GetMerchantResponse {
+  // merchant is the requested merchant.
+  Merchant merchant = 1;
+}
+
+// ListMerchantsRequest lists merchants.
+message ListMerchantsRequest {
+  // page is the pagination request.
+  commongrpc.PaginationRequest page = 1;
+}
+
+// ListMerchantsResponse returns a page of merchants.
+message ListMerchantsResponse {
+  // merchants is the page of merchants.
+  repeated Merchant merchants = 1;
+  // page is the pagination response.
+  commongrpc.PaginationResponse page = 2;
+}
+
+// CreateCustomerRequest creates a customer.
+message CreateCustomerRequest {
+  // client_id references the RVPay client record.
+  string client_id = 1;
+  // merchant_id references the payment gateway serving this customer.
+  string merchant_id = 2;
+  // phone_number is the customer's payment phone number.
+  string phone_number = 3;
+}
+
+// CreateCustomerResponse returns the created customer.
+message CreateCustomerResponse {
+  // customer is the created customer.
+  Customer customer = 1;
+}
+
+// GetCustomerRequest fetches a customer by id.
+message GetCustomerRequest {
+  // customer_id is the stable public identifier of the customer.
+  string customer_id = 1;
+}
+
+// GetCustomerResponse returns the requested customer.
+message GetCustomerResponse {
+  // customer is the requested customer.
+  Customer customer = 1;
+}
+
+// CreateDepositRequest initiates a deposit.
+message CreateDepositRequest {
+  // client_id references the RVPay client record.
+  string client_id = 1;
+  // customer_id references the paying customer.
+  string customer_id = 2;
+  // merchant_id references the processing merchant.
+  string merchant_id = 3;
+  // amount is the deposit amount and currency.
+  commongrpc.Money amount = 4;
+  // payment_type identifies the payment method.
+  commongrpc.PaymentType payment_type = 5;
+  // payer_phone_number is the payer's phone number.
+  string payer_phone_number = 6;
+  // provider identifies the payment provider.
+  commongrpc.Provider provider = 7;
+}
+
+// CreateDepositResponse returns the created deposit.
+message CreateDepositResponse {
+  // deposit is the created deposit.
+  Deposit deposit = 1;
+}
+
+// GetDepositRequest fetches a deposit by id.
+message GetDepositRequest {
+  // deposit_id is the stable public identifier of the deposit.
+  string deposit_id = 1;
+}
+
+// GetDepositResponse returns the requested deposit.
+message GetDepositResponse {
+  // deposit is the requested deposit.
+  Deposit deposit = 1;
+}
+
+// CreatePayoutRequest requests a payout.
+message CreatePayoutRequest {
+  // client_id references the RVPay client record.
+  string client_id = 1;
+  // merchant_id references the processing merchant.
+  string merchant_id = 2;
+  // amount is the payout amount and currency.
+  commongrpc.Money amount = 3;
+  // provider identifies the payment provider.
+  commongrpc.Provider provider = 4;
+  // destination_reference is the destination account reference.
+  string destination_reference = 5;
+}
+
+// CreatePayoutResponse returns the created payout.
+message CreatePayoutResponse {
+  // payout is the created payout.
+  Payout payout = 1;
+}
+
+// GetPayoutRequest fetches a payout by id.
+message GetPayoutRequest {
+  // payout_id is the stable public identifier of the payout.
+  string payout_id = 1;
+}
+
+// GetPayoutResponse returns the requested payout.
+message GetPayoutResponse {
+  // payout is the requested payout.
+  Payout payout = 1;
+}
+
+// MerchantService manages payment gateways.
+service MerchantService {
+  // CreateMerchant registers a new merchant.
+  rpc CreateMerchant(CreateMerchantRequest) returns (CreateMerchantResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/merchants"
+      body : "*"
+    };
+  }
+  // GetMerchant fetches a merchant by id.
+  rpc GetMerchant(GetMerchantRequest) returns (GetMerchantResponse) {
+    option (google.api.http) = {
+      get : "/v1/public/merchants/{merchant_id}"
+    };
+  }
+  // ListMerchants lists merchants.
+  rpc ListMerchants(ListMerchantsRequest) returns (ListMerchantsResponse) {
+    option (google.api.http) = {
+      get : "/v1/public/merchants"
+    };
+  }
+}
+
+// CustomerService manages customer payment records.
+service CustomerService {
+  // CreateCustomer creates a customer record.
+  rpc CreateCustomer(CreateCustomerRequest) returns (CreateCustomerResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/customers"
+      body : "*"
+    };
+  }
+  // GetCustomer fetches a customer by id.
+  rpc GetCustomer(GetCustomerRequest) returns (GetCustomerResponse) {
+    option (google.api.http) = {
+      get : "/v1/public/customers/{customer_id}"
+    };
+  }
+}
+
+// DepositService manages inbound customer payments.
+service DepositService {
+  // InitiateDeposit initiates a customer deposit.
+  rpc InitiateDeposit(CreateDepositRequest) returns (CreateDepositResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/deposits"
+      body : "*"
+    };
+  }
+  // GetDeposit fetches a deposit by id.
+  rpc GetDeposit(GetDepositRequest) returns (GetDepositResponse) {
+    option (google.api.http) = {
+      get : "/v1/public/deposits/{deposit_id}"
+    };
+  }
+}
+
+// PayoutService manages outbound settlements.
+service PayoutService {
+  // RequestPayout requests an outbound settlement.
+  rpc RequestPayout(CreatePayoutRequest) returns (CreatePayoutResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/payouts"
+      body : "*"
+    };
+  }
+  // GetPayout fetches a payout by id.
+  rpc GetPayout(GetPayoutRequest) returns (GetPayoutResponse) {
+    option (google.api.http) = {
+      get : "/v1/public/payouts/{payout_id}"
+    };
+  }
+}
