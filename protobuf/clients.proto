@@ -419,9 +419,7 @@ service IntegrationsService {
       returns (ListIntegrationsResponse) {
     option (google.api.http) = {
       get : "/v1/public/integrations"
-      additional_bindings {
-        get : "/v1/public/clients/{client_id}/integrations"
-      }
+      additional_bindings {get : "/v1/public/clients/{client_id}/integrations"}
     };
   }
 
