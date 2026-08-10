@@ -321,6 +321,112 @@ func (WebhookStatus) EnumDescriptor() ([]byte, []int) {
 	return file_common_proto_rawDescGZIP(), []int{4}
 }
 
+// Provider identifies a payment provider supported by RVPay.
+type Provider int32
+
+const (
+	// PROVIDER_UNSPECIFIED is the default value and is not a valid state.
+	Provider_PROVIDER_UNSPECIFIED Provider = 0
+	// PROVIDER_MTN_MOMO identifies the MTN Mobile Money provider.
+	Provider_PROVIDER_MTN_MOMO Provider = 1
+	// PROVIDER_ORANGE_MOMO identifies the Orange Mobile Money provider.
+	Provider_PROVIDER_ORANGE_MOMO Provider = 2
+)
+
+// Enum value maps for Provider.
+var (
+	Provider_name = map[int32]string{
+		0: "PROVIDER_UNSPECIFIED",
+		1: "PROVIDER_MTN_MOMO",
+		2: "PROVIDER_ORANGE_MOMO",
+	}
+	Provider_value = map[string]int32{
+		"PROVIDER_UNSPECIFIED": 0,
+		"PROVIDER_MTN_MOMO":    1,
+		"PROVIDER_ORANGE_MOMO": 2,
+	}
+)
+
+func (x Provider) Enum() *Provider {
+	p := new(Provider)
+	*p = x
+	return p
+}
+
+func (x Provider) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (Provider) Descriptor() protoreflect.EnumDescriptor {
+	return file_common_proto_enumTypes[5].Descriptor()
+}
+
+func (Provider) Type() protoreflect.EnumType {
+	return &file_common_proto_enumTypes[5]
+}
+
+func (x Provider) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use Provider.Descriptor instead.
+func (Provider) EnumDescriptor() ([]byte, []int) {
+	return file_common_proto_rawDescGZIP(), []int{5}
+}
+
+// PaymentType identifies the payment method used for a transaction.
+type PaymentType int32
+
+const (
+	// PAYMENT_TYPE_UNSPECIFIED is the default value and is not a valid state.
+	PaymentType_PAYMENT_TYPE_UNSPECIFIED PaymentType = 0
+	// PAYMENT_TYPE_MMO identifies a mobile money payment.
+	PaymentType_PAYMENT_TYPE_MMO PaymentType = 1
+	// PAYMENT_TYPE_CREDIT_CARD identifies a credit card payment.
+	PaymentType_PAYMENT_TYPE_CREDIT_CARD PaymentType = 2
+)
+
+// Enum value maps for PaymentType.
+var (
+	PaymentType_name = map[int32]string{
+		0: "PAYMENT_TYPE_UNSPECIFIED",
+		1: "PAYMENT_TYPE_MMO",
+		2: "PAYMENT_TYPE_CREDIT_CARD",
+	}
+	PaymentType_value = map[string]int32{
+		"PAYMENT_TYPE_UNSPECIFIED": 0,
+		"PAYMENT_TYPE_MMO":         1,
+		"PAYMENT_TYPE_CREDIT_CARD": 2,
+	}
+)
+
+func (x PaymentType) Enum() *PaymentType {
+	p := new(PaymentType)
+	*p = x
+	return p
+}
+
+func (x PaymentType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PaymentType) Descriptor() protoreflect.EnumDescriptor {
+	return file_common_proto_enumTypes[6].Descriptor()
+}
+
+func (PaymentType) Type() protoreflect.EnumType {
+	return &file_common_proto_enumTypes[6]
+}
+
+func (x PaymentType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PaymentType.Descriptor instead.
+func (PaymentType) EnumDescriptor() ([]byte, []int) {
+	return file_common_proto_rawDescGZIP(), []int{6}
+}
+
 // ProviderCapability describes a capability a platform may support.
 type ProviderCapability int32
 
@@ -361,11 +467,11 @@ func (x ProviderCapability) String() string {
 }
 
 func (ProviderCapability) Descriptor() protoreflect.EnumDescriptor {
-	return file_common_proto_enumTypes[5].Descriptor()
+	return file_common_proto_enumTypes[7].Descriptor()
 }
 
 func (ProviderCapability) Type() protoreflect.EnumType {
-	return &file_common_proto_enumTypes[5]
+	return &file_common_proto_enumTypes[7]
 }
 
 func (x ProviderCapability) Number() protoreflect.EnumNumber {
@@ -374,7 +480,63 @@ func (x ProviderCapability) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ProviderCapability.Descriptor instead.
 func (ProviderCapability) EnumDescriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{5}
+	return file_common_proto_rawDescGZIP(), []int{7}
+}
+
+// Money represents a monetary value using a decimal string and an ISO 4217
+// currency code.
+type Money struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// amount is a decimal string, e.g. "1000.00".
+	Amount string `protobuf:"bytes,1,opt,name=amount,proto3" json:"amount,omitempty"`
+	// currency is an uppercase ISO 4217 code, e.g. "XAF".
+	Currency      string `protobuf:"bytes,2,opt,name=currency,proto3" json:"currency,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Money) Reset() {
+	*x = Money{}
+	mi := &file_common_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Money) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Money) ProtoMessage() {}
+
+func (x *Money) ProtoReflect() protoreflect.Message {
+	mi := &file_common_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Money.ProtoReflect.Descriptor instead.
+func (*Money) Descriptor() ([]byte, []int) {
+	return file_common_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *Money) GetAmount() string {
+	if x != nil {
+		return x.Amount
+	}
+	return ""
+}
+
+func (x *Money) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
 }
 
 // PaginationRequest carries pagination parameters for list operations.
@@ -390,7 +552,7 @@ type PaginationRequest struct {
 
 func (x *PaginationRequest) Reset() {
 	*x = PaginationRequest{}
-	mi := &file_common_proto_msgTypes[0]
+	mi := &file_common_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -402,7 +564,7 @@ func (x *PaginationRequest) String() string {
 func (*PaginationRequest) ProtoMessage() {}
 
 func (x *PaginationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[0]
+	mi := &file_common_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -415,7 +577,7 @@ func (x *PaginationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PaginationRequest.ProtoReflect.Descriptor instead.
 func (*PaginationRequest) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{0}
+	return file_common_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *PaginationRequest) GetPageSize() int32 {
@@ -446,7 +608,7 @@ type PaginationResponse struct {
 
 func (x *PaginationResponse) Reset() {
 	*x = PaginationResponse{}
-	mi := &file_common_proto_msgTypes[1]
+	mi := &file_common_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -458,7 +620,7 @@ func (x *PaginationResponse) String() string {
 func (*PaginationResponse) ProtoMessage() {}
 
 func (x *PaginationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[1]
+	mi := &file_common_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -471,7 +633,7 @@ func (x *PaginationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PaginationResponse.ProtoReflect.Descriptor instead.
 func (*PaginationResponse) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{1}
+	return file_common_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *PaginationResponse) GetNextPageToken() string {
@@ -503,7 +665,7 @@ type Error struct {
 
 func (x *Error) Reset() {
 	*x = Error{}
-	mi := &file_common_proto_msgTypes[2]
+	mi := &file_common_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -515,7 +677,7 @@ func (x *Error) String() string {
 func (*Error) ProtoMessage() {}
 
 func (x *Error) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[2]
+	mi := &file_common_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -528,7 +690,7 @@ func (x *Error) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Error.ProtoReflect.Descriptor instead.
 func (*Error) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{2}
+	return file_common_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Error) GetCode() string {
@@ -563,7 +725,7 @@ type Metadata struct {
 
 func (x *Metadata) Reset() {
 	*x = Metadata{}
-	mi := &file_common_proto_msgTypes[3]
+	mi := &file_common_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -575,7 +737,7 @@ func (x *Metadata) String() string {
 func (*Metadata) ProtoMessage() {}
 
 func (x *Metadata) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[3]
+	mi := &file_common_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -588,7 +750,7 @@ func (x *Metadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Metadata.ProtoReflect.Descriptor instead.
 func (*Metadata) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{3}
+	return file_common_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Metadata) GetEntries() []*MetadataEntry {
@@ -611,7 +773,7 @@ type MetadataEntry struct {
 
 func (x *MetadataEntry) Reset() {
 	*x = MetadataEntry{}
-	mi := &file_common_proto_msgTypes[4]
+	mi := &file_common_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -623,7 +785,7 @@ func (x *MetadataEntry) String() string {
 func (*MetadataEntry) ProtoMessage() {}
 
 func (x *MetadataEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[4]
+	mi := &file_common_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -636,7 +798,7 @@ func (x *MetadataEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MetadataEntry.ProtoReflect.Descriptor instead.
 func (*MetadataEntry) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{4}
+	return file_common_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *MetadataEntry) GetKey() string {
@@ -666,7 +828,7 @@ type AuditInformation struct {
 
 func (x *AuditInformation) Reset() {
 	*x = AuditInformation{}
-	mi := &file_common_proto_msgTypes[5]
+	mi := &file_common_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -678,7 +840,7 @@ func (x *AuditInformation) String() string {
 func (*AuditInformation) ProtoMessage() {}
 
 func (x *AuditInformation) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[5]
+	mi := &file_common_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -691,7 +853,7 @@ func (x *AuditInformation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditInformation.ProtoReflect.Descriptor instead.
 func (*AuditInformation) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{5}
+	return file_common_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *AuditInformation) GetCreatedAt() *timestamppb.Timestamp {
@@ -721,7 +883,7 @@ type HealthStatus struct {
 
 func (x *HealthStatus) Reset() {
 	*x = HealthStatus{}
-	mi := &file_common_proto_msgTypes[6]
+	mi := &file_common_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -733,7 +895,7 @@ func (x *HealthStatus) String() string {
 func (*HealthStatus) ProtoMessage() {}
 
 func (x *HealthStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_common_proto_msgTypes[6]
+	mi := &file_common_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -746,7 +908,7 @@ func (x *HealthStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthStatus.ProtoReflect.Descriptor instead.
 func (*HealthStatus) Descriptor() ([]byte, []int) {
-	return file_common_proto_rawDescGZIP(), []int{6}
+	return file_common_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *HealthStatus) GetStatus() string {
@@ -768,7 +930,10 @@ var File_common_proto protoreflect.FileDescriptor
 const file_common_proto_rawDesc = "" +
 	"\n" +
 	"\fcommon.proto\x12\n" +
-	"commongrpc\x1a\x1fgoogle/protobuf/timestamp.proto\"O\n" +
+	"commongrpc\x1a\x1fgoogle/protobuf/timestamp.proto\";\n" +
+	"\x05Money\x12\x16\n" +
+	"\x06amount\x18\x01 \x01(\tR\x06amount\x12\x1a\n" +
+	"\bcurrency\x18\x02 \x01(\tR\bcurrency\"O\n" +
 	"\x11PaginationRequest\x12\x1b\n" +
 	"\tpage_size\x18\x01 \x01(\x05R\bpageSize\x12\x1d\n" +
 	"\n" +
@@ -819,7 +984,15 @@ const file_common_proto_rawDesc = "" +
 	"\rWebhookStatus\x12\x1e\n" +
 	"\x1aWEBHOOK_STATUS_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15WEBHOOK_STATUS_ACTIVE\x10\x01\x12\x1b\n" +
-	"\x17WEBHOOK_STATUS_DISABLED\x10\x02*y\n" +
+	"\x17WEBHOOK_STATUS_DISABLED\x10\x02*U\n" +
+	"\bProvider\x12\x18\n" +
+	"\x14PROVIDER_UNSPECIFIED\x10\x00\x12\x15\n" +
+	"\x11PROVIDER_MTN_MOMO\x10\x01\x12\x18\n" +
+	"\x14PROVIDER_ORANGE_MOMO\x10\x02*_\n" +
+	"\vPaymentType\x12\x1c\n" +
+	"\x18PAYMENT_TYPE_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10PAYMENT_TYPE_MMO\x10\x01\x12\x1c\n" +
+	"\x18PAYMENT_TYPE_CREDIT_CARD\x10\x02*y\n" +
 	"\x12ProviderCapability\x12#\n" +
 	"\x1fPROVIDER_CAPABILITY_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19PROVIDER_CAPABILITY_OAUTH\x10\x01\x12\x1f\n" +
@@ -837,29 +1010,32 @@ func file_common_proto_rawDescGZIP() []byte {
 	return file_common_proto_rawDescData
 }
 
-var file_common_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_common_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_common_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
+var file_common_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_common_proto_goTypes = []any{
 	(ClientStatus)(0),             // 0: commongrpc.ClientStatus
 	(PlatformStatus)(0),           // 1: commongrpc.PlatformStatus
 	(IntegrationStatus)(0),        // 2: commongrpc.IntegrationStatus
 	(OAuthStatus)(0),              // 3: commongrpc.OAuthStatus
 	(WebhookStatus)(0),            // 4: commongrpc.WebhookStatus
-	(ProviderCapability)(0),       // 5: commongrpc.ProviderCapability
-	(*PaginationRequest)(nil),     // 6: commongrpc.PaginationRequest
-	(*PaginationResponse)(nil),    // 7: commongrpc.PaginationResponse
-	(*Error)(nil),                 // 8: commongrpc.Error
-	(*Metadata)(nil),              // 9: commongrpc.Metadata
-	(*MetadataEntry)(nil),         // 10: commongrpc.MetadataEntry
-	(*AuditInformation)(nil),      // 11: commongrpc.AuditInformation
-	(*HealthStatus)(nil),          // 12: commongrpc.HealthStatus
-	(*timestamppb.Timestamp)(nil), // 13: google.protobuf.Timestamp
+	(Provider)(0),                 // 5: commongrpc.Provider
+	(PaymentType)(0),              // 6: commongrpc.PaymentType
+	(ProviderCapability)(0),       // 7: commongrpc.ProviderCapability
+	(*Money)(nil),                 // 8: commongrpc.Money
+	(*PaginationRequest)(nil),     // 9: commongrpc.PaginationRequest
+	(*PaginationResponse)(nil),    // 10: commongrpc.PaginationResponse
+	(*Error)(nil),                 // 11: commongrpc.Error
+	(*Metadata)(nil),              // 12: commongrpc.Metadata
+	(*MetadataEntry)(nil),         // 13: commongrpc.MetadataEntry
+	(*AuditInformation)(nil),      // 14: commongrpc.AuditInformation
+	(*HealthStatus)(nil),          // 15: commongrpc.HealthStatus
+	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
 }
 var file_common_proto_depIdxs = []int32{
-	10, // 0: commongrpc.Metadata.entries:type_name -> commongrpc.MetadataEntry
-	13, // 1: commongrpc.AuditInformation.created_at:type_name -> google.protobuf.Timestamp
-	13, // 2: commongrpc.AuditInformation.updated_at:type_name -> google.protobuf.Timestamp
-	13, // 3: commongrpc.HealthStatus.last_checked_at:type_name -> google.protobuf.Timestamp
+	13, // 0: commongrpc.Metadata.entries:type_name -> commongrpc.MetadataEntry
+	16, // 1: commongrpc.AuditInformation.created_at:type_name -> google.protobuf.Timestamp
+	16, // 2: commongrpc.AuditInformation.updated_at:type_name -> google.protobuf.Timestamp
+	16, // 3: commongrpc.HealthStatus.last_checked_at:type_name -> google.protobuf.Timestamp
 	4,  // [4:4] is the sub-list for method output_type
 	4,  // [4:4] is the sub-list for method input_type
 	4,  // [4:4] is the sub-list for extension type_name
@@ -877,8 +1053,8 @@ func file_common_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_common_proto_rawDesc), len(file_common_proto_rawDesc)),
-			NumEnums:      6,
-			NumMessages:   7,
+			NumEnums:      8,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

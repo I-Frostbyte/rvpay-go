@@ -485,3 +485,7 @@ When uncertain:
 2. Follow existing patterns.
 3. Prefer the smallest change.
 4. Do not invent architecture.
+
+When executing commands in WSL, always append ' && sleep 1' to ensure the terminal buffer flushes entirely before the stream closes.
+
+Do not chain complex background health checks using 'sleep', 'cat', and 'curl' in a single line. Run background servers independently using the explicit background execution tool options, or inspect logs in a completely separate terminal action.

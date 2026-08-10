@@ -78,6 +78,35 @@ enum WebhookStatus {
   WEBHOOK_STATUS_DISABLED = 2;
 }
 
+// Provider identifies a payment provider supported by RVPay.
+enum Provider {
+  // PROVIDER_UNSPECIFIED is the default value and is not a valid state.
+  PROVIDER_UNSPECIFIED = 0;
+  // PROVIDER_MTN_MOMO identifies the MTN Mobile Money provider.
+  PROVIDER_MTN_MOMO = 1;
+  // PROVIDER_ORANGE_MOMO identifies the Orange Mobile Money provider.
+  PROVIDER_ORANGE_MOMO = 2;
+}
+
+// PaymentType identifies the payment method used for a transaction.
+enum PaymentType {
+  // PAYMENT_TYPE_UNSPECIFIED is the default value and is not a valid state.
+  PAYMENT_TYPE_UNSPECIFIED = 0;
+  // PAYMENT_TYPE_MMO identifies a mobile money payment.
+  PAYMENT_TYPE_MMO = 1;
+  // PAYMENT_TYPE_CREDIT_CARD identifies a credit card payment.
+  PAYMENT_TYPE_CREDIT_CARD = 2;
+}
+
+// Money represents a monetary value using a decimal string and an ISO 4217
+// currency code.
+message Money {
+  // amount is a decimal string, e.g. "1000.00".
+  string amount = 1;
+  // currency is an uppercase ISO 4217 code, e.g. "XAF".
+  string currency = 2;
+}
+
 // ProviderCapability describes a capability a platform may support.
 enum ProviderCapability {
   // PROVIDER_CAPABILITY_UNSPECIFIED is the default value and is not a valid
