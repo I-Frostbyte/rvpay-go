@@ -73,12 +73,12 @@ func Migrate(dbURL string, migrationPath string, logger zerolog.Logger) error {
 	logger.Info().Msgf("absolute migration path: %v", absPath)
 
 	// Create a new migration instance with the absolute path.
+	// Note: the migrate.Migrate struct holds the full database URL (including
+	// credentials); it must never be logged. Only the migration path is logged.
 	m, err := migrate.New(
 		"file://"+absPath,
 		dbURL,
 	)
-
-	logger.Info().Msgf("migration instance %v", m)
 	if err != nil {
 		return err
 	}

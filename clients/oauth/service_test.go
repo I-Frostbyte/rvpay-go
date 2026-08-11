@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"context"
+	"net/url"
 	"testing"
 	"time"
 
@@ -434,7 +435,7 @@ func TestAuthorizationURL(t *testing.T) {
 	}
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback"))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret"))
 
 	svc := NewService(
 		newMockIntegrationRepo(),
@@ -442,15 +443,27 @@ func TestAuthorizationURL(t *testing.T) {
 		newMockClientRepo(),
 		platformRepo,
 		registry,
+		"https://example.com/callback",
 		zerolog.Nop(),
 	)
 
-	url, err := svc.AuthorizationURL(context.Background(), uuid.New(), platformID, "test-state")
+	authURL, err := svc.AuthorizationURL(context.Background(), uuid.New(), platformID, "test-state")
 	if err != nil {
 		t.Fatalf("AuthorizationURL failed: %v", err)
 	}
-	if url == "" {
+	if authURL == "" {
 		t.Fatal("authorization URL should not be empty")
+	}
+
+	// SECURITY REGRESSION TEST (SEC-02): the redirect_uri in the generated
+	// authorization URL must be the configured value, never a hard-coded
+	// fallback.
+	parsed, err := url.Parse(authURL)
+	if err != nil {
+		t.Fatalf("authorization URL unparseable: %v", err)
+	}
+	if got := parsed.Query().Get("redirect_uri"); got != "https://example.com/callback" {
+		t.Fatalf("redirect_uri = %q, want configured %q", got, "https://example.com/callback")
 	}
 }
 
@@ -467,7 +480,7 @@ func TestAuthorizationURLDisabledPlatform(t *testing.T) {
 	}
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback"))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret"))
 
 	svc := NewService(
 		newMockIntegrationRepo(),
@@ -475,6 +488,7 @@ func TestAuthorizationURLDisabledPlatform(t *testing.T) {
 		newMockClientRepo(),
 		platformRepo,
 		registry,
+		"https://example.com/callback",
 		zerolog.Nop(),
 	)
 
@@ -504,6 +518,7 @@ func TestAuthorizationURLUnknownProvider(t *testing.T) {
 		newMockClientRepo(),
 		platformRepo,
 		registry,
+		"https://example.com/callback",
 		zerolog.Nop(),
 	)
 

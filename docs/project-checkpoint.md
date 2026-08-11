@@ -1,9 +1,9 @@
 # RVPay Project Checkpoint
 
-Document Version: 2.0
+Document Version: 2.1
 Status: Handoff / Navigation Document
 System: RVPay
-Updated: 2026-08-11 (after Platform Agent 09 — Observability)
+Updated: 2026-08-11 (after Platform Agent 10 — Security)
 
 ## Authoritative Files
 
@@ -17,7 +17,7 @@ A fresh Cline session must read these before making changes:
 - docs/protobuf-strategy.md — protobuf ownership, packages, shared types,
   versioning, gateway.
 - docs/migration-plan.md — ordered migration roadmap and Phase expectations.
-- agents/platform/10-security.md — the current (next) agent.
+- agents/platform/11-performance.md — the current (next) agent.
 - docs/platform-repository-audit.md — baseline for all Platform work.
 - docs/project-checkpoint.md — this document.
 
@@ -62,7 +62,7 @@ A fresh Cline session must read these before making changes:
 
 The repository is a Go microservices monorepo with four runnable services plus
 shared platform infrastructure. The cumulative implementation through Platform
-09 is:
+10 is:
 
 - **Foundation** — COMPLETE: domain model, repository layout, protobuf
   strategy, migration plan (`docs/00-foundation`, `docs/`).
@@ -70,7 +70,7 @@ shared platform infrastructure. The cumulative implementation through Platform
   (`clients/docs/production-readiness-review.md`, READY WITH WARNINGS).
 - **Transactions Service** — COMPLETE and production-reviewed
   (`docs/transactions-production-review.md`, READY WITH CONDITIONS).
-- **Platform** — Agents 01–09 COMPLETE; Agents 10–12 NOT STARTED.
+- **Platform** — Agents 01–10 COMPLETE; Agents 11–12 NOT STARTED.
 - **PostgreSQL** — IMPLEMENTED as the only datastore (pgxpool per service;
   golang-migrate up/down per service; sqlc v1.29.0).
 - **Protobuf/gRPC** — IMPLEMENTED across all services; deterministic
@@ -148,7 +148,8 @@ shared platform infrastructure. The cumulative implementation through Platform
   (`docs/platform-documentation-review.md`).
 - **Platform 09 — Observability**: COMPLETE
   (`docs/platform-observability-review.md`).
-- **Platform 10 — Security**: NOT STARTED.
+- **Platform 10 — Security**: COMPLETE
+  (`docs/platform-security-review.md`).
 - **Platform 11 — Performance**: NOT STARTED.
 - **Platform 12 — Final Review**: NOT STARTED.
 
@@ -168,33 +169,33 @@ shared platform infrastructure. The cumulative implementation through Platform
 | Platform | 07 Render | COMPLETE | `docs/platform-render-review.md` |
 | Platform | 08 Documentation | COMPLETE | `docs/platform-documentation-review.md` |
 | Platform | 09 Observability | COMPLETE | `docs/platform-observability-review.md` |
-| Platform | 10 Security | NOT STARTED | next agent |
-| Platform | 11 Performance | NOT STARTED | |
+| Platform | 10 Security | COMPLETE | `docs/platform-security-review.md` |
+| Platform | 11 Performance | NOT STARTED | next agent |
 | Platform | 12 Final Review | NOT STARTED | |
 
 ## Current Work
 
-The repository confirms Platform 09 is complete (commit `55b3e4a
-09-observability`; `docs/platform-observability-review.md` exists; the
-`shared/observability` package is implemented and adopted in Clients and
-Transactions).
+The repository confirms Platform 10 is complete
+(`docs/platform-security-review.md` exists; the security fixes for DB
+credential logging, configured OAuth redirect URI, and distinct webhook secret
+are implemented and tested).
 
-**Platform 09 — Observability — COMPLETE**
+**Platform 10 — Security — COMPLETE**
 
 The next logical unfinished agent is:
 
-**agents/platform/10-security.md**
+**agents/platform/11-performance.md**
 
 ## Next Action
 
 The next implementation task is:
 
-**agents/platform/10-security.md**
+**agents/platform/11-performance.md**
 
 The next Cline session should read the authoritative project files (README.md,
 agents/project-context.md, docs/domain-model.md, docs/repository-layout.md,
 docs/protobuf-strategy.md, docs/migration-plan.md, and the relevant platform
-reviews) followed by the Platform 10 agent instructions before making changes.
+reviews) followed by the Platform 11 agent instructions before making changes.
 
 ## Rules for Continuing
 
@@ -227,7 +228,9 @@ reviews) followed by the Platform 10 agent instructions before making changes.
   `docs/transactions-production-review.md`.
 - Clients production review documented HIGH/MEDIUM findings (OAuth token
   encryption at rest, redirect URI config wiring, webhook dedup) — see
-  `clients/docs/production-readiness-review.md`.
+  `clients/docs/production-readiness-review.md`. The redirect URI config wiring
+  finding was addressed by Platform 10 (SEC-02: configured `HIGHLEVEL_REDIRECT_URI`
+  is now used by the OAuth service).
 - No authentication/authorization middleware in any service (Platform 10).
 - No metrics/tracing/request-ID-based distributed tracing (request IDs exist;
   metrics/tracing deferred — Platform 11/12).
@@ -295,6 +298,7 @@ reviews) followed by the Platform 10 agent instructions before making changes.
 - Platform Render configuration completed (`docs/platform-render-review.md`).
 - Platform documentation completed (`docs/platform-documentation-review.md`).
 - Platform observability completed (`docs/platform-observability-review.md`).
+- Platform security completed (`docs/platform-security-review.md`).
 
 ## Current Repository State
 
@@ -319,14 +323,14 @@ reviews) followed by the Platform 10 agent instructions before making changes.
 Start by reading README.md, agents/project-context.md, docs/project-checkpoint.md,
 and the relevant foundation documents (docs/domain-model.md,
 docs/repository-layout.md, docs/protobuf-strategy.md, docs/migration-plan.md).
-Then read the active agent file (agents/platform/10-security.md). Do not rely
-on the previous Cline conversation. Treat the repository and these documents
-as the source of truth.
+Then read the active agent file (agents/platform/11-performance.md). Do not
+rely on the previous Cline conversation. Treat the repository and these
+documents as the source of truth.
 
 Current completed endpoint:
 
-**Platform 09 — Observability**
+**Platform 10 — Security**
 
 Next task:
 
-**Platform 10 — Security**
+**Platform 11 — Performance**

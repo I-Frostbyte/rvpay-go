@@ -91,7 +91,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	webhookSubscriptionRepo := repo.NewWebhookSubscriptionRepo(clientsRepo.Do())
 
 	providerRegistry := providers.NewProviderRegistry()
-	highLevelProvider := providers.NewHighLevelProvider(cfg.HighLevel.ClientID, cfg.HighLevel.ClientSecret, cfg.HighLevel.RedirectURI)
+	highLevelProvider := providers.NewHighLevelProvider(cfg.HighLevel.ClientID, cfg.HighLevel.ClientSecret, cfg.HighLevel.RedirectURI, cfg.Webhook.Secret)
 	providerRegistry.Register(highLevelProvider)
 	logger.Info().Msg("providers registered successfully")
 
@@ -99,7 +99,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	platformsService := service.NewPlatformsServiceImpl(platformRepo, logger)
 	integrationsService := service.NewIntegrationsServiceImpl(integrationRepo, clientRepo, platformRepo, oauthTokenRepo, webhookSubscriptionRepo, logger)
 
-	oauth.NewService(integrationRepo, oauthTokenRepo, clientRepo, platformRepo, providerRegistry, logger)
+	oauth.NewService(integrationRepo, oauthTokenRepo, clientRepo, platformRepo, providerRegistry, cfg.HighLevel.RedirectURI, logger)
 	webhooks.NewService(integrationRepo, webhookSubscriptionRepo, platformRepo, providerRegistry, logger)
 
 	svrOpts := []grpc.ServerOption{

@@ -19,16 +19,20 @@ type Service struct {
 	clientsRepo      repo.ClientRepo
 	platformsRepo    repo.PlatformRepo
 	registry         providers.ProviderRegistry
+	redirectURI      string
 	logger           zerolog.Logger
 }
 
-// NewService creates a new OAuth service.
+// NewService creates a new OAuth service. redirectURI is the configured
+// callback URL used for the OAuth authorization and token exchange; it must
+// come from configuration (HIGHLEVEL_REDIRECT_URI), never be hard-coded.
 func NewService(
 	integrationsRepo repo.IntegrationRepo,
 	oauthRepo repo.OAuthTokenRepo,
 	clientsRepo repo.ClientRepo,
 	platformsRepo repo.PlatformRepo,
 	registry providers.ProviderRegistry,
+	redirectURI string,
 	logger zerolog.Logger,
 ) *Service {
 	return &Service{
@@ -37,6 +41,7 @@ func NewService(
 		clientsRepo:      clientsRepo,
 		platformsRepo:    platformsRepo,
 		registry:         registry,
+		redirectURI:      redirectURI,
 		logger:           logger,
 	}
 }
@@ -60,8 +65,7 @@ func (s *Service) AuthorizationURL(ctx context.Context, clientID, platformID uui
 		return "", ErrProviderNotSupported
 	}
 
-	redirectURI := "https://api.rvpay.com/v1/public/oauth/callback"
-	authURL, err := provider.OAuthProvider().GenerateAuthorizationURL(ctx, state, redirectURI)
+	authURL, err := provider.OAuthProvider().GenerateAuthorizationURL(ctx, state, s.redirectURI)
 	if err != nil {
 		return "", err
 	}
@@ -114,8 +118,7 @@ func (s *Service) ProcessCallback(ctx context.Context, clientID, platformID uuid
 		return nil, ErrClientInactive
 	}
 
-	redirectURI := "https://api.rvpay.com/v1/public/oauth/callback"
-	tokenResp, err := provider.OAuthProvider().ExchangeCode(ctx, code, redirectURI)
+	tokenResp, err := provider.OAuthProvider().ExchangeCode(ctx, code, s.redirectURI)
 	if err != nil {
 		s.logger.Error().Err(err).Str("client_id", clientID.String()).Str("platform_id", platformID.String()).Msg("OAuth token exchange failed")
 		return nil, ErrTokenExchangeFailed

@@ -89,3 +89,22 @@ func TestMigrate_MissingMigrationPath(t *testing.T) {
 		t.Fatal("Migrate(missing path) expected error, got nil")
 	}
 }
+
+func TestMigrate_DoesNotLogDatabaseCredentials(t *testing.T) {
+	// SECURITY REGRESSION TEST (SEC-01): the migrate.Migrate struct holds the
+	// full database URL including credentials. It must never be written to
+	// logs. This test captures the logger output and verifies the password and
+	// the full DSN do not appear.
+	var buf strings.Builder
+	logger := zerolog.New(&buf)
+
+	_ = Migrate("postgres://alice:super-secret-pw@db.internal:5432/rvpay?sslmode=require", "/path/that/does/not/exist", logger)
+
+	output := buf.String()
+	if strings.Contains(output, "super-secret-pw") {
+		t.Errorf("migration logs leaked the database password: %q", output)
+	}
+	if strings.Contains(output, "postgres://alice:") {
+		t.Errorf("migration logs leaked the database URL: %q", output)
+	}
+}
