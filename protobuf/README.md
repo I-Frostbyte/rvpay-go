@@ -8,42 +8,32 @@ APIs. Generated Go code is committed outside this directory under
 
 ```text
 protobuf/
-├── deposits.proto  # Deposits API contract
-├── Makefile        # protobuf lint and Go code generation targets
-└── Dockerfile      # currently empty
+├── clients.proto        # Clients Service contract (clientsgrpc)
+├── transactions.proto   # Transactions Service contract (transactionsgrpc)
+├── common.proto         # Shared enums and messages (commongrpc)
+├── deposits.proto       # Legacy Deposits Service contract (depositsgrpc)
+├── integrations.proto   # Legacy Integrations Service contract (integrationsgrpc)
+├── Makefile             # protobuf lint and Go code generation targets
+└── README.md            # This file
 ```
 
-`deposits.proto` declares package `depositsgrpc` and generates the Go client,
-server interface, messages, and enums used by the Deposits service.
+Each service owns one protobuf package (`<service>grpc`); shared types live in
+`commongrpc` (`common.proto`). Every `go_package` option matches the repository
+Go module: `github.com/I-Frostbyte/rvpay-go/grpc/go/<package>`.
 
-## Deposits contract
+## Contracts
 
-The service exposes one RPC:
+| File | Package | Service(s) | HTTP annotation examples |
+| --- | --- | --- | --- |
+| `clients.proto` | `clientsgrpc` | `ClientsService`, `PlatformsService`, `IntegrationsService` | `POST /v1/public/clients`, `GET /v1/public/clients/{id}`, `GET /v1/public/platforms`, `POST /v1/public/integrations`, `GET /v1/public/clients/{client_id}/integrations` |
+| `transactions.proto` | `transactionsgrpc` | `MerchantService`, `CustomerService`, `DepositService`, `PayoutService` | `POST/GET /v1/public/merchants[/{merchant_id}]`, `POST/GET /v1/public/customers[/{customer_id}]`, `POST/GET /v1/public/deposits[/{deposit_id}]`, `POST/GET /v1/public/payouts[/{payout_id}]` |
+| `common.proto` | `commongrpc` | Shared types (status enums, `Provider`, `PaymentType`, `Money`, pagination, errors) | none |
+| `deposits.proto` | `depositsgrpc` | `DepositsService` (legacy) | `POST /v1/public/deposits` |
+| `integrations.proto` | `integrationsgrpc` | `IntegrationService` (legacy) | `POST/GET/DELETE /v1/public/integrations`, `POST /v1/public/webhooks` |
 
-```proto
-rpc InitiateDeposit(CreateDepositRequest) returns (CreateDepositResponse)
-```
-
-Its gRPC method name is
-`/depositsgrpc.DepositsService/InitiateDeposit`. The schema also supplies the
-Google API HTTP annotation `POST /v1/public/deposits` with the full request as
-the body. This repository currently generates only Go gRPC stubs; it does not
-generate or run a gRPC-Gateway HTTP endpoint.
-
-`CreateDepositRequest` contains:
-
-- `amount` as a string (for example, `"1000.00"`)
-- `currency` as a string (the database expects an uppercase three-letter code)
-- `payer`, containing a deposit type and account details
-- `client_id` (defined by the contract but not used by the current service)
-
-`CreateDepositResponse` returns `deposit_id`, a `DepositStatus`, and
-`next_step`. The present service returns `DEPOSIT_STATUS_ACCEPTED` and
-`FINAL_STATUS` after it successfully initiates the PawaPay request.
-
-The available provider enum values are MTN MoMo Cameroon and Orange MoMo
-Cameroon. The available payer type values are MMO and CARD; the current server
-only meaningfully handles MMO.
+All public RPCs carry a `google.api.http` annotation; REST paths are under
+`/v1/public/...`. See [`../docs/protobuf-strategy.md`](../docs/protobuf-strategy.md)
+for the authoritative protobuf architecture.
 
 ## Generate Go stubs
 
@@ -52,7 +42,8 @@ Prerequisites:
 - `protoc`
 - `protoc-gen-go`
 - `protoc-gen-go-grpc`
-- the `third_party/googleapis` submodule, because the schema imports
+- `protoc-gen-grpc-gateway`
+- the `third_party/googleapis` submodule, because the schemas import
   `google/api/annotations.proto`
 
 From the repository root, initialise the submodule if necessary:
@@ -64,17 +55,23 @@ git submodule update --init --recursive
 Then, from this directory:
 
 ```bash
-make generate-protos
+make lint              # clang-format dry-run over *.proto
+make generate-protos   # generate Go, gRPC, and gateway stubs
 ```
 
-For every `*.proto` source, the Makefile creates
-`../grpc/go/<proto-name>grpc/` and invokes `protoc` with source-relative Go and
-gRPC output. For `deposits.proto`, the expected generated files are:
+For every `*.proto` source, the Makefile creates `../grpc/go/<proto-name>grpc/`
+and invokes `protoc` with source-relative Go, gRPC, and gateway output. For
+`clients.proto`, the expected generated files are:
 
 ```text
-../grpc/go/depositsgrpc/deposits.pb.go
-../grpc/go/depositsgrpc/deposits_grpc.pb.go
+../grpc/go/clientsgrpc/clients.pb.go
+../grpc/go/clientsgrpc/clients_grpc.pb.go
+../grpc/go/clientsgrpc/clients.pb.gw.go
 ```
+
+Every HTTP-exposed service also gets a generated gateway file (`*.pb.gw.go`) in
+its package; the runtime gateway is wired in each service's
+`cmd/grpc-service/main.go`.
 
 Generated files should not be edited by hand. Regenerate them after changing a
 contract, then review and commit the generated output with the `.proto` change.
@@ -85,9 +82,7 @@ contract, then review and commit the generated output with the `.proto` change.
 make lint
 ```
 
-This runs `clang-format --dry-run --Werror` over the protobuf sources (and any
-files in `types/` if that directory is added). Run `clang-format` to apply
-formatting before rerunning the lint target.
+This runs `clang-format --dry-run --Werror` over the protobuf sources.
 
 ## Compatibility notes
 
@@ -95,8 +90,9 @@ formatting before rerunning the lint target.
   existing numbers and reserve removed values instead of reusing them.
 - Add fields rather than renaming/removing deployed fields where compatibility
   matters.
-- The `go_package` option currently names
-  `github.com/rvpay/rvpay-go/grpc/go/depositsgrpc`, while this repository’s Go
-  module is `github.com/I-Frostbyte/rvpay-go`. The checked-in generated package
-  is used locally by its directory path, but align this option before relying on
-  regenerated code as a published Go import path.
+- The `go_package` option for every contract matches the repository Go module
+  (`github.com/I-Frostbyte/rvpay-go`), so generated code is importable as a
+  standard Go package.
+- Legacy `deposits.proto` and `integrations.proto` remain committed while the
+  Deposits and Integrations services are runnable; they are retired with those
+  services per `docs/migration-plan.md`.
