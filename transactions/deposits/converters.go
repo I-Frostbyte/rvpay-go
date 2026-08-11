@@ -3,28 +3,28 @@ package deposits
 import (
 	"strconv"
 
-	"github.com/I-Frostbyte/rvpay-go/transactions/db/sqlc"
 	commongrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/commongrpc"
 	transactionsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpc"
+	"github.com/I-Frostbyte/rvpay-go/transactions/db/sqlc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // depositToProto maps a persisted deposit to its protobuf representation.
 func depositToProto(deposit sqlc.Deposit) *transactionsgrpc.Deposit {
 	proto := &transactionsgrpc.Deposit{
-		Id:               deposit.ID.String(),
-		ClientId:         deposit.ClientID.String(),
-		CustomerId:       deposit.CustomerID.String(),
-		MerchantId:       deposit.MerchantID.String(),
-		Amount:           &commongrpc.Money{},
-		PaymentType:      sqlcPaymentTypeToGrpc(deposit.PaymentType),
-		PayerPhoneNumber: deposit.PayerPhoneNumber,
-		Provider:         sqlcPaymentProviderToGrpc(deposit.Provider),
-		Status:           sqlcDepositStatusToGrpc(deposit.Status),
+		Id:                deposit.ID.String(),
+		ClientId:          deposit.ClientID.String(),
+		CustomerId:        deposit.CustomerID.String(),
+		MerchantId:        deposit.MerchantID.String(),
+		Amount:            &commongrpc.Money{},
+		PaymentType:       sqlcPaymentTypeToGrpc(deposit.PaymentType),
+		PayerPhoneNumber:  deposit.PayerPhoneNumber,
+		Provider:          sqlcPaymentProviderToGrpc(deposit.Provider),
+		Status:            sqlcDepositStatusToGrpc(deposit.Status),
 		ExternalReference: deposit.ExternalReference,
-		InitiatedAt:      timestamppb.New(deposit.InitiatedAt),
-		CreatedAt:        timestamppb.New(deposit.CreatedAt),
-		UpdatedAt:        timestamppb.New(deposit.UpdatedAt),
+		InitiatedAt:       timestamppb.New(deposit.InitiatedAt),
+		CreatedAt:         timestamppb.New(deposit.CreatedAt),
+		UpdatedAt:         timestamppb.New(deposit.UpdatedAt),
 	}
 
 	// Amount is stored as NUMERIC(18,2); expose it as a decimal string.

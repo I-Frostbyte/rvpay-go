@@ -42,12 +42,12 @@ func (p *HighLevelWebhookProvider) VerifyRequest(ctx context.Context, headers ma
 
 func (p *HighLevelWebhookProvider) ParseEvent(ctx context.Context, body []byte) (*WebhookEvent, error) {
 	var payload struct {
-		EventID    string                 `json:"eventId"`
-		EventType  string                 `json:"eventType"`
-		IntegrationID string              `json:"integrationId"`
-		ClientID   string                 `json:"clientId"`
-		Data       map[string]interface{} `json:"data"`
-		Timestamp  int64                  `json:"timestamp"`
+		EventID       string                 `json:"eventId"`
+		EventType     string                 `json:"eventType"`
+		IntegrationID string                 `json:"integrationId"`
+		ClientID      string                 `json:"clientId"`
+		Data          map[string]interface{} `json:"data"`
+		Timestamp     int64                  `json:"timestamp"`
 	}
 
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -55,13 +55,13 @@ func (p *HighLevelWebhookProvider) ParseEvent(ctx context.Context, body []byte) 
 	}
 
 	event := &WebhookEvent{
-		Provider:       "highlevel",
-		EventType:      payload.EventType,
+		Provider:        "highlevel",
+		EventType:       payload.EventType,
 		ProviderEventID: payload.EventID,
-		IntegrationID:  payload.IntegrationID,
-		ClientID:       payload.ClientID,
-		Payload:        payload.Data,
-		ReceivedAt:     payload.Timestamp,
+		IntegrationID:   payload.IntegrationID,
+		ClientID:        payload.ClientID,
+		Payload:         payload.Data,
+		ReceivedAt:      payload.Timestamp,
 	}
 
 	return event, nil

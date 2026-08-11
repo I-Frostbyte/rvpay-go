@@ -7,9 +7,9 @@ import (
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/clients/db/sqlc"
 	"github.com/I-Frostbyte/rvpay-go/clients/providers"
-	"github.com/rs/zerolog"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

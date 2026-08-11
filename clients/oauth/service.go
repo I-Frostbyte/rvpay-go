@@ -8,8 +8,8 @@ import (
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/clients/db/sqlc"
 	"github.com/I-Frostbyte/rvpay-go/clients/providers"
-	"github.com/rs/zerolog"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 )
 
 // Service manages OAuth flows for provider integrations.
@@ -77,13 +77,13 @@ func (s *Service) AuthorizationURL(ctx context.Context, clientID, platformID uui
 
 // CallbackResult represents the result of an OAuth callback.
 type CallbackResult struct {
-	IntegrationID uuid.UUID
-	ClientID      uuid.UUID
-	PlatformID    uuid.UUID
-	AccessToken   string
-	RefreshToken  string
-	ExpiresAt     time.Time
-	Scope         string
+	IntegrationID  uuid.UUID
+	ClientID       uuid.UUID
+	PlatformID     uuid.UUID
+	AccessToken    string
+	RefreshToken   string
+	ExpiresAt      time.Time
+	Scope          string
 	ProviderUserID string
 }
 
@@ -153,13 +153,13 @@ func (s *Service) ProcessCallback(ctx context.Context, clientID, platformID uuid
 	s.logger.Info().Str("integration_id", integration.ID.String()).Str("client_id", clientID.String()).Str("platform_id", platformID.String()).Str("provider_user_id", providerUserID).Msg("OAuth callback processed successfully")
 
 	return &CallbackResult{
-		IntegrationID: integration.ID,
-		ClientID:      clientID,
-		PlatformID:    platformID,
-		AccessToken:   tokenResp.AccessToken,
-		RefreshToken:  tokenResp.RefreshToken,
-		ExpiresAt:     expiresAt,
-		Scope:         tokenResp.Scope,
+		IntegrationID:  integration.ID,
+		ClientID:       clientID,
+		PlatformID:     platformID,
+		AccessToken:    tokenResp.AccessToken,
+		RefreshToken:   tokenResp.RefreshToken,
+		ExpiresAt:      expiresAt,
+		Scope:          tokenResp.Scope,
 		ProviderUserID: providerUserID,
 	}, nil
 }

@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
+	commongrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/commongrpc"
+	transactionsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpc"
 	"github.com/I-Frostbyte/rvpay-go/transactions/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/transactions/db/repo/mocks"
 	"github.com/I-Frostbyte/rvpay-go/transactions/db/sqlc"
-	commongrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/commongrpc"
-	transactionsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpc"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rs/zerolog"
@@ -107,10 +107,10 @@ func TestRequestPayoutSuccess(t *testing.T) {
 		Return(sqlc.Payout{ID: uuid.New()}, nil)
 
 	resp, err := service.RequestPayout(context.Background(), &transactionsgrpc.CreatePayoutRequest{
-		ClientId:            uuid.New().String(),
-		MerchantId:          uuid.New().String(),
-		Amount:              &commongrpc.Money{Amount: "1000.00", Currency: "XAF"},
-		Provider:            commongrpc.Provider_PROVIDER_MTN_MOMO,
+		ClientId:             uuid.New().String(),
+		MerchantId:           uuid.New().String(),
+		Amount:               &commongrpc.Money{Amount: "1000.00", Currency: "XAF"},
+		Provider:             commongrpc.Provider_PROVIDER_MTN_MOMO,
 		DestinationReference: "USER-123",
 	})
 	if err != nil {
@@ -134,10 +134,10 @@ func TestRequestPayoutDuplicate(t *testing.T) {
 		Return(sqlc.Payout{}, repo.ErrDuplicate)
 
 	_, err := service.RequestPayout(context.Background(), &transactionsgrpc.CreatePayoutRequest{
-		ClientId:            uuid.New().String(),
-		MerchantId:          uuid.New().String(),
-		Amount:              &commongrpc.Money{Amount: "1000.00", Currency: "XAF"},
-		Provider:            commongrpc.Provider_PROVIDER_MTN_MOMO,
+		ClientId:             uuid.New().String(),
+		MerchantId:           uuid.New().String(),
+		Amount:               &commongrpc.Money{Amount: "1000.00", Currency: "XAF"},
+		Provider:             commongrpc.Provider_PROVIDER_MTN_MOMO,
 		DestinationReference: "USER-123",
 	})
 	if got := status.Code(err); got != codes.AlreadyExists {

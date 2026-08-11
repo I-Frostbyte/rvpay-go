@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
+	commongrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/commongrpc"
+	transactionsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpc"
 	"github.com/I-Frostbyte/rvpay-go/transactions/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/transactions/db/repo/mocks"
 	"github.com/I-Frostbyte/rvpay-go/transactions/db/sqlc"
-	commongrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/commongrpc"
-	transactionsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpc"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rs/zerolog"
@@ -90,13 +90,13 @@ func TestInitiateDepositCustomerNotFound(t *testing.T) {
 		Return(sqlc.Customer{}, repo.ErrNotFound)
 
 	_, err := service.InitiateDeposit(context.Background(), &transactionsgrpc.CreateDepositRequest{
-		ClientId:        uuid.New().String(),
-		CustomerId:      uuid.New().String(),
-		MerchantId:      uuid.New().String(),
-		Amount:          &commongrpc.Money{Amount: "1000.00", Currency: "XAF"},
-		PaymentType:     commongrpc.PaymentType_PAYMENT_TYPE_MMO,
+		ClientId:         uuid.New().String(),
+		CustomerId:       uuid.New().String(),
+		MerchantId:       uuid.New().String(),
+		Amount:           &commongrpc.Money{Amount: "1000.00", Currency: "XAF"},
+		PaymentType:      commongrpc.PaymentType_PAYMENT_TYPE_MMO,
 		PayerPhoneNumber: "+237600000000",
-		Provider:        commongrpc.Provider_PROVIDER_MTN_MOMO,
+		Provider:         commongrpc.Provider_PROVIDER_MTN_MOMO,
 	})
 	if got := status.Code(err); got != codes.NotFound {
 		t.Fatalf("status code = %s, want %s", got, codes.NotFound)
@@ -125,13 +125,13 @@ func TestInitiateDepositSuccess(t *testing.T) {
 		Return(sqlc.Deposit{ID: uuid.New()}, nil)
 
 	resp, err := service.InitiateDeposit(context.Background(), &transactionsgrpc.CreateDepositRequest{
-		ClientId:        uuid.New().String(),
-		CustomerId:      uuid.New().String(),
-		MerchantId:      uuid.New().String(),
-		Amount:          &commongrpc.Money{Amount: "1000.00", Currency: "XAF"},
-		PaymentType:     commongrpc.PaymentType_PAYMENT_TYPE_MMO,
+		ClientId:         uuid.New().String(),
+		CustomerId:       uuid.New().String(),
+		MerchantId:       uuid.New().String(),
+		Amount:           &commongrpc.Money{Amount: "1000.00", Currency: "XAF"},
+		PaymentType:      commongrpc.PaymentType_PAYMENT_TYPE_MMO,
 		PayerPhoneNumber: "+237600000000",
-		Provider:        commongrpc.Provider_PROVIDER_MTN_MOMO,
+		Provider:         commongrpc.Provider_PROVIDER_MTN_MOMO,
 	})
 	if err != nil {
 		t.Fatalf("InitiateDeposit failed: %v", err)
