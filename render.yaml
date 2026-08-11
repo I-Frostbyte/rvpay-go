@@ -1,8 +1,9 @@
 # Render Blueprint for rvpay-go
-# Deploys the Deposits gRPC/REST service and a managed PostgreSQL database.
+# Deploys the Deposits, Clients, and Transactions gRPC/REST services and a
+# managed PostgreSQL database per service.
 # See https://render.com/docs/blueprint-spec for the full schema.
 #
-# The service reads PORT (injected by Render) for the HTTP gateway and
+# Each service reads PORT (injected by Render) for the HTTP gateway and
 # LISTEN_PORT for the gRPC server. Render's health check hits /healthz on PORT.
 
 services:
@@ -51,7 +52,103 @@ services:
       - key: PAWAPAY_API_KEY
         sync: false
 
+  - type: web
+    name: rvpay-clients
+    runtime: docker
+    repo: https://github.com/I-Frostbyte/rvpay-go
+    branch: main
+    dockerfilePath: ./clients/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: LISTEN_PORT
+        value: "50051"
+      - key: MIGRATION_PATH
+        value: /app/clients/db/migrations
+      - key: RUN_MIGRATIONS
+        value: "true"
+      - key: LOG_LEVEL
+        value: info
+      - key: DB_TLS_DISABLED
+        value: "false"
+      - key: DB_HOST
+        fromDatabase:
+          name: rvpay-clients-postgres
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: rvpay-clients-postgres
+          property: port
+      - key: DB_USER
+        fromDatabase:
+          name: rvpay-clients-postgres
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: rvpay-clients-postgres
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: rvpay-clients-postgres
+          property: database
+      - key: HIGHLEVEL_CLIENT_ID
+        sync: false
+      - key: HIGHLEVEL_CLIENT_SECRET
+        sync: false
+      - key: HIGHLEVEL_REDIRECT_URI
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
+
+  - type: web
+    name: rvpay-transactions
+    runtime: docker
+    repo: https://github.com/I-Frostbyte/rvpay-go
+    branch: main
+    dockerfilePath: ./transactions/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: LISTEN_PORT
+        value: "50051"
+      - key: MIGRATION_PATH
+        value: /app/transactions/db/migrations
+      - key: RUN_MIGRATIONS
+        value: "true"
+      - key: LOG_LEVEL
+        value: info
+      - key: DB_TLS_DISABLED
+        value: "false"
+      - key: DB_HOST
+        fromDatabase:
+          name: rvpay-transactions-postgres
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: rvpay-transactions-postgres
+          property: port
+      - key: DB_USER
+        fromDatabase:
+          name: rvpay-transactions-postgres
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: rvpay-transactions-postgres
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: rvpay-transactions-postgres
+          property: database
+
 databases:
   - name: rvpay-postgres
     databaseName: rvpay
     user: rvpay
+  - name: rvpay-clients-postgres
+    databaseName: rvpay_clients
+    user: rvpay_clients
+  - name: rvpay-transactions-postgres
+    databaseName: rvpay_transactions
+    user: rvpay_transactions
