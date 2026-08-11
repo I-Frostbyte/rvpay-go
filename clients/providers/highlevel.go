@@ -23,6 +23,7 @@ type HighLevelProvider struct {
 	tokenURL      string
 	userInfoURL   string
 	scopes        []string
+	httpClient    *http.Client
 }
 
 // NewHighLevelProvider creates a new HighLevel provider. webhookSecret is the
@@ -38,6 +39,9 @@ func NewHighLevelProvider(clientID, clientSecret, redirectURI, webhookSecret str
 		tokenURL:      "https://api.highlevel.com/oauth/token",
 		userInfoURL:   "https://api.highlevel.com/v1/users/me",
 		scopes:        []string{"read", "write"},
+		// A single shared client is reused across all provider calls so HTTP
+		// connections are pooled and reused rather than recreated per request.
+		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -107,8 +111,7 @@ func (p *HighLevelProvider) ExchangeCode(ctx context.Context, code string, redir
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("token request failed: %w", err)
 	}
@@ -157,8 +160,7 @@ func (p *HighLevelProvider) RefreshToken(ctx context.Context, refreshToken strin
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("refresh request failed: %w", err)
 	}
@@ -201,8 +203,7 @@ func (p *HighLevelProvider) GetUserInfo(ctx context.Context, accessToken string)
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("user info request failed: %w", err)
 	}

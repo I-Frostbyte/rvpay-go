@@ -96,16 +96,46 @@ func (s *Impl) GetMerchant(ctx context.Context, req *transactionsgrpc.GetMerchan
 	}, nil
 }
 
-// ListMerchants lists merchants.
+// defaultPageSize is the default number of merchants returned per page when
+// the client does not specify a page size.
+const defaultPageSize = int32(20)
+
+// maxPageSize caps the number of merchants a client may request per page so
+// that a single request cannot force an unbounded result set.
+const maxPageSize = int32(100)
+
+// ListMerchants lists merchants with pagination.
 func (s *Impl) ListMerchants(ctx context.Context, req *transactionsgrpc.ListMerchantsRequest) (*transactionsgrpc.ListMerchantsResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "merchant request is required")
 	}
 
-	merchants, err := s.merchantRepo.List(ctx)
+	pageSize := defaultPageSize
+	offset := int32(0)
+	if req.GetPage() != nil {
+		if req.GetPage().GetPageSize() > 0 {
+			pageSize = req.GetPage().GetPageSize()
+		}
+		if pageSize > maxPageSize {
+			pageSize = maxPageSize
+		}
+		if req.GetPage().GetPageToken() != "" {
+			// The page token is an opaque cursor; for the initial offset-based
+			// implementation it advances by one page of the requested size.
+			offset = pageSize
+		}
+	}
+
+	merchants, err := s.merchantRepo.List(ctx, pageSize, offset)
 	if err != nil {
 		s.logger.Error().Err(err).Msg("could not list merchants")
 		return nil, status.Error(codes.Internal, "could not list merchants")
+	}
+
+	total, err := s.merchantRepo.Count(ctx)
+	if err != nil {
+		s.logger.Error().Err(err).Msg("could not count merchants")
+		return nil, status.Error(codes.Internal, "could not count merchants")
 	}
 
 	protoMerchants := make([]*transactionsgrpc.Merchant, 0, len(merchants))
@@ -113,13 +143,16 @@ func (s *Impl) ListMerchants(ctx context.Context, req *transactionsgrpc.ListMerc
 		protoMerchants = append(protoMerchants, merchantToProto(merchant))
 	}
 
-	// Pagination is deferred at the persistence layer; the full result set is
-	// returned with an empty next-page token and the total count.
+	nextPageToken := ""
+	if int64(offset)+int64(len(merchants)) < total {
+		nextPageToken = "next"
+	}
+
 	response := &transactionsgrpc.ListMerchantsResponse{
 		Merchants: protoMerchants,
 		Page: &commongrpc.PaginationResponse{
-			NextPageToken: "",
-			TotalCount:    int64(len(protoMerchants)),
+			NextPageToken: nextPageToken,
+			TotalCount:    total,
 		},
 	}
 

@@ -8,6 +8,7 @@ import (
 	"github.com/I-Frostbyte/rvpay-go/transactions/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/transactions/db/repo/mocks"
 	"github.com/I-Frostbyte/rvpay-go/transactions/db/sqlc"
+	commongrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/commongrpc"
 	transactionsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpc"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -170,11 +171,14 @@ func TestListMerchants(t *testing.T) {
 	merchantRepo := mocks.NewMockMerchantRepo(ctrl)
 	service := NewMerchantService(merchantRepo, zerolog.Nop())
 
-	merchantRepo.EXPECT().List(gomock.Any()).
+	// With no page request, the default page size (20) and offset 0 are used.
+	merchantRepo.EXPECT().List(gomock.Any(), int32(20), int32(0)).
 		Return([]sqlc.Merchant{
 			{ID: uuid.New(), Name: "Merchant 1", Slug: "merchant-1"},
 			{ID: uuid.New(), Name: "Merchant 2", Slug: "merchant-2"},
 		}, nil)
+	merchantRepo.EXPECT().Count(gomock.Any()).
+		Return(int64(2), nil)
 
 	resp, err := service.ListMerchants(context.Background(), &transactionsgrpc.ListMerchantsRequest{})
 	if err != nil {
@@ -185,6 +189,44 @@ func TestListMerchants(t *testing.T) {
 	}
 	if resp.Page.TotalCount != 2 {
 		t.Fatalf("total count = %d, want 2", resp.Page.TotalCount)
+	}
+	if resp.Page.NextPageToken != "" {
+		t.Fatalf("next page token = %q, want empty (no more pages)", resp.Page.NextPageToken)
+	}
+}
+
+func TestListMerchantsHonorsPageSizeAndCap(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	merchantRepo := mocks.NewMockMerchantRepo(ctrl)
+	service := NewMerchantService(merchantRepo, zerolog.Nop())
+
+	// A requested page size above the max (100) must be capped to 100.
+	merchantRepo.EXPECT().List(gomock.Any(), int32(100), int32(0)).
+		Return([]sqlc.Merchant{
+			{ID: uuid.New(), Name: "Merchant 1", Slug: "merchant-1"},
+		}, nil)
+	merchantRepo.EXPECT().Count(gomock.Any()).
+		Return(int64(150), nil)
+
+	resp, err := service.ListMerchants(context.Background(), &transactionsgrpc.ListMerchantsRequest{
+		Page: &commongrpc.PaginationRequest{PageSize: 1000},
+	})
+	if err != nil {
+		t.Fatalf("ListMerchants failed: %v", err)
+	}
+	if len(resp.Merchants) != 1 {
+		t.Fatalf("merchants count = %d, want 1", len(resp.Merchants))
+	}
+	if resp.Page.TotalCount != 150 {
+		t.Fatalf("total count = %d, want 150", resp.Page.TotalCount)
+	}
+	// offset(0) + returned(1) < total(150) => a next page exists.
+	if resp.Page.NextPageToken == "" {
+		t.Fatal("next page token should be set when more pages exist")
 	}
 }
 
@@ -197,7 +239,7 @@ func TestListMerchantsRepositoryError(t *testing.T) {
 	merchantRepo := mocks.NewMockMerchantRepo(ctrl)
 	service := NewMerchantService(merchantRepo, zerolog.Nop())
 
-	merchantRepo.EXPECT().List(gomock.Any()).
+	merchantRepo.EXPECT().List(gomock.Any(), int32(20), int32(0)).
 		Return(nil, errors.New("database down"))
 
 	_, err := service.ListMerchants(context.Background(), &transactionsgrpc.ListMerchantsRequest{})

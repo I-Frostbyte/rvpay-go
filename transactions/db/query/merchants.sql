@@ -10,7 +10,12 @@ SELECT * FROM merchants WHERE id = $1;
 SELECT * FROM merchants WHERE slug = $1;
 
 -- name: ListMerchants :many
-SELECT * FROM merchants ORDER BY created_at;
+SELECT * FROM merchants
+ORDER BY created_at
+LIMIT $1 OFFSET $2;
+
+-- name: CountMerchants :one
+SELECT COUNT(*) FROM merchants;
 
 -- name: UpdateMerchantStatus :one
 UPDATE merchants
