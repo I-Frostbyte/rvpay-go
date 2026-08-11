@@ -8,9 +8,8 @@
 #   4. generated-code drift verification
 #   5. format/static/build validation
 #   6. tests
-#   7. Docker build (deposits, clients, transactions)
+#   7. Docker build (deposits (removed), clients, transactions)
 #   8. Render deployment
-#
 # The existing .github/workflows/deploy.yml targets OCI and is left untouched.
 name: Deploy to Render
 
@@ -48,9 +47,12 @@ jobs:
           cd protobuf
           make generate-protos
           cd ..
-      - name: sqlc generation
+      - name: sqlc generation (clients & transactions)
         run: |
-          cd deposits/db
+          cd clients/db
+          go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 generate
+          cd ../..
+          cd transactions/db
           go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 generate
           cd ../..
       - name: Verify generated code is current
@@ -61,9 +63,8 @@ jobs:
             echo "Run 'cd protobuf && make generate-protos' and commit the generated files."
             exit 1
           fi
-          # sqlc and mock output for all services.
+          # sqlc and mock output for active services (deposits removed)
           if ! git diff --exit-code \
-            deposits/db/sqlc deposits/db/repo/mocks deposits/db/sqlc/mocks \
             clients/db/sqlc clients/db/repo/mocks clients/db/sqlc/mocks \
             transactions/db/sqlc transactions/db/repo/mocks transactions/db/sqlc/mocks; then
             echo "::error::Generated sqlc or mock code is out of date."
@@ -115,7 +116,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [deposits, clients, transactions]
+        service: [clients, transactions] # REMOVED: deposits
     steps:
       - uses: actions/checkout@v4
         with:
@@ -128,12 +129,12 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Trigger Render deploy
+      - name: Trigger Render Blueprint Sync
         env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          RENDER_BLUEPRINT_HOOK: ${{ secrets.RENDER_BLUEPRINT_HOOK }}
         run: |
-          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
-            echo "::notice::Render deploy skipped: RENDER_DEPLOY_HOOK secret is not set."
+          if [ -z "$RENDER_BLUEPRINT_HOOK" ]; then
+            echo "::notice::Render deploy skipped: RENDER_BLUEPRINT_HOOK secret is not set."
             exit 0
           fi
-          curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
+          curl -fsS -X POST "$RENDER_BLUEPRINT_HOOK"

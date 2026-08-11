@@ -1,59 +1,12 @@
 # Render Blueprint for rvpay-go
-# Deploys the Deposits, Clients, and Transactions gRPC/REST services and a
-# managed PostgreSQL database per service.
-# See https://render.com/docs/blueprint-spec for the full schema.
-#
-# Each service reads PORT (injected by Render) for the HTTP gateway and
-# LISTEN_PORT for the gRPC server. Render's health check hits /healthz on PORT.
+# Uses Render's Free Tier exclusively.
+# Creates one new Free PostgreSQL instance shared between both services.
+# See https://render.com for the full schema.
 
 services:
   - type: web
-    name: rvpay-deposits
-    runtime: docker
-    repo: https://github.com/I-Frostbyte/rvpay-go
-    branch: main
-    dockerfilePath: ./deposits/Dockerfile
-    dockerContext: .
-    healthCheckPath: /healthz
-    autoDeploy: true
-    envVars:
-      - key: LISTEN_PORT
-        value: "50051"
-      - key: MIGRATION_PATH
-        value: /app/deposits/db/migrations
-      - key: RUN_MIGRATIONS
-        value: "true"
-      - key: LOG_LEVEL
-        value: info
-      - key: DB_TLS_DISABLED
-        value: "false"
-      - key: DB_HOST
-        fromDatabase:
-          name: rvpay-postgres
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: rvpay-postgres
-          property: port
-      - key: DB_USER
-        fromDatabase:
-          name: rvpay-postgres
-          property: user
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: rvpay-postgres
-          property: password
-      - key: DB_NAME
-        fromDatabase:
-          name: rvpay-postgres
-          property: database
-      - key: PAWAPAY_API_URL
-        sync: false
-      - key: PAWAPAY_API_KEY
-        sync: false
-
-  - type: web
     name: rvpay-clients
+    plan: free
     runtime: docker
     repo: https://github.com/I-Frostbyte/rvpay-go
     branch: main
@@ -74,23 +27,23 @@ services:
         value: "false"
       - key: DB_HOST
         fromDatabase:
-          name: rvpay-clients-postgres
+          name: rvpay-shared-postgres
           property: host
       - key: DB_PORT
         fromDatabase:
-          name: rvpay-clients-postgres
+          name: rvpay-shared-postgres
           property: port
       - key: DB_USER
         fromDatabase:
-          name: rvpay-clients-postgres
+          name: rvpay-shared-postgres
           property: user
       - key: DB_PASSWORD
         fromDatabase:
-          name: rvpay-clients-postgres
+          name: rvpay-shared-postgres
           property: password
       - key: DB_NAME
         fromDatabase:
-          name: rvpay-clients-postgres
+          name: rvpay-shared-postgres
           property: database
       - key: HIGHLEVEL_CLIENT_ID
         sync: false
@@ -103,6 +56,7 @@ services:
 
   - type: web
     name: rvpay-transactions
+    plan: free
     runtime: docker
     repo: https://github.com/I-Frostbyte/rvpay-go
     branch: main
@@ -123,32 +77,27 @@ services:
         value: "false"
       - key: DB_HOST
         fromDatabase:
-          name: rvpay-transactions-postgres
+          name: rvpay-shared-postgres
           property: host
       - key: DB_PORT
         fromDatabase:
-          name: rvpay-transactions-postgres
+          name: rvpay-shared-postgres
           property: port
       - key: DB_USER
         fromDatabase:
-          name: rvpay-transactions-postgres
+          name: rvpay-shared-postgres
           property: user
       - key: DB_PASSWORD
         fromDatabase:
-          name: rvpay-transactions-postgres
+          name: rvpay-shared-postgres
           property: password
       - key: DB_NAME
         fromDatabase:
-          name: rvpay-transactions-postgres
+          name: rvpay-shared-postgres
           property: database
 
 databases:
-  - name: rvpay-postgres
-    databaseName: rvpay
-    user: rvpay
-  - name: rvpay-clients-postgres
-    databaseName: rvpay_clients
-    user: rvpay_clients
-  - name: rvpay-transactions-postgres
-    databaseName: rvpay_transactions
-    user: rvpay_transactions
+  - name: rvpay-shared-postgres
+    plan: free
+    databaseName: rvpay_testing
+    user: rvpay_user
