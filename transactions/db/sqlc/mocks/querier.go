@@ -42,6 +42,21 @@ func (m *MockQuerier) EXPECT() *MockQuerierMockRecorder {
 	return m.recorder
 }
 
+// CountMerchants mocks base method.
+func (m *MockQuerier) CountMerchants(ctx context.Context) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountMerchants", ctx)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountMerchants indicates an expected call of CountMerchants.
+func (mr *MockQuerierMockRecorder) CountMerchants(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountMerchants", reflect.TypeOf((*MockQuerier)(nil).CountMerchants), ctx)
+}
+
 // CreateCustomer mocks base method.
 func (m *MockQuerier) CreateCustomer(ctx context.Context, arg sqlc.CreateCustomerParams) (sqlc.Customer, error) {
 	m.ctrl.T.Helper()
@@ -343,18 +358,18 @@ func (mr *MockQuerierMockRecorder) ListDepositsByStatus(ctx, status any) *gomock
 }
 
 // ListMerchants mocks base method.
-func (m *MockQuerier) ListMerchants(ctx context.Context) ([]sqlc.Merchant, error) {
+func (m *MockQuerier) ListMerchants(ctx context.Context, arg sqlc.ListMerchantsParams) ([]sqlc.Merchant, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListMerchants", ctx)
+	ret := m.ctrl.Call(m, "ListMerchants", ctx, arg)
 	ret0, _ := ret[0].([]sqlc.Merchant)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListMerchants indicates an expected call of ListMerchants.
-func (mr *MockQuerierMockRecorder) ListMerchants(ctx any) *gomock.Call {
+func (mr *MockQuerierMockRecorder) ListMerchants(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMerchants", reflect.TypeOf((*MockQuerier)(nil).ListMerchants), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMerchants", reflect.TypeOf((*MockQuerier)(nil).ListMerchants), ctx, arg)
 }
 
 // ListPayoutsByClient mocks base method.
