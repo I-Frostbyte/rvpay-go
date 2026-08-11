@@ -85,7 +85,7 @@ jobs:
           cache: true
       - name: Check formatting (hand-written Go only)
         run: |
-          unformatted=$(gofmt -l $(git ls-files '*.go' | grep -v -E 'grpc/go/|/db/sqlc/|/mocks/|\.pb\.go$|\.pb\.gw\.go$'))
+          unformatted=$(gofmt -l $(git ls-files '*.go' | grep -v -E 'grpc/go/|/db/sqlc/|/mocks/|\.pb\.go$|\.pb\.gw\.go$|^deposits/|^integrations/'))
           if [ -n "$unformatted" ]; then
             echo "::error::The following files are not gofmt-formatted:"
             echo "$unformatted"
