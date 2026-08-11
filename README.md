@@ -313,6 +313,19 @@ gofmt -l .                     # formatting check (hand-written Go)
 Service-level suites (e.g. clients, transactions) pass without external
 infrastructure; the gateway wiring tests use in-process fakes.
 
+## Observability
+
+- **Logs**: structured JSON to stdout/stderr (zerolog). `LOG_LEVEL` controls
+  verbosity (`debug`, `info`, `warn`, `error`).
+- **Request IDs**: every HTTP/gRPC request receives or propagates an
+  `X-Request-ID`; it is echoed in the response and attached to access/RPC
+  logs for error correlation.
+- **Access logs**: HTTP gateway requests are logged with method, path, status,
+  duration, and request ID. `/healthz` probes are logged at debug to avoid
+  noise.
+- **Health**: each service exposes `/healthz` (HTTP) and the gRPC health
+  protocol. Render uses `/healthz`.
+
 ## Docker
 
 Every service has a multi-stage distroless Dockerfile. The build context is the

@@ -21,6 +21,7 @@ import (
 	"github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpc"
 	commondatabase "github.com/I-Frostbyte/rvpay-go/shared/database"
 	commonlogger "github.com/I-Frostbyte/rvpay-go/shared/logger"
+	commonobservability "github.com/I-Frostbyte/rvpay-go/shared/observability"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog"
@@ -104,6 +105,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	svrOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
 			grpc_recovery.UnaryServerInterceptor(),
+			commonobservability.UnaryServerInterceptor(logger),
 		),
 	}
 
@@ -142,7 +144,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	defer cancel()
 
 	httpMux := http.NewServeMux()
-	httpMux.Handle("/", gatewayMux)
+	httpMux.Handle("/", commonobservability.AccessLog(logger)(gatewayMux))
 	httpMux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusMethodNotAllowed)
