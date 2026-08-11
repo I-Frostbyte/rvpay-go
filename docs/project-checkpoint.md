@@ -1,9 +1,9 @@
 # RVPay Project Checkpoint
 
-Document Version: 1.0
+Document Version: 2.0
 Status: Handoff / Navigation Document
 System: RVPay
-Updated: 2026-08-10 (after Platform Agent 01 — Repository Audit)
+Updated: 2026-08-11 (after Platform Agent 09 — Observability)
 
 ## Authoritative Files
 
@@ -17,7 +17,7 @@ A fresh Cline session must read these before making changes:
 - docs/protobuf-strategy.md — protobuf ownership, packages, shared types,
   versioning, gateway.
 - docs/migration-plan.md — ordered migration roadmap and Phase expectations.
-- agents/platform/02-protobuf-generation.md — the current (next) agent.
+- agents/platform/10-security.md — the current (next) agent.
 - docs/platform-repository-audit.md — baseline for all Platform work.
 - docs/project-checkpoint.md — this document.
 
@@ -39,129 +39,204 @@ A fresh Cline session must read these before making changes:
   Transactions per the migration plan; not deleted).
 - **integrations/** — legacy Integrations Service (still runnable; evolves
   into Clients per the migration plan; not deleted).
-- **protobuf/** — authoritative protobuf sources: `deposits.proto`,
-  `integrations.proto`, `clients.proto`, `transactions.proto`, `common.proto`
-  (shared `commongrpc`). Includes `Makefile` (generate-protos) and
-  `Dockerfile`.
+- **protobuf/** — authoritative protobuf sources: `clients.proto`,
+  `transactions.proto`, `common.proto` (shared `commongrpc`), plus legacy
+  `deposits.proto`, `integrations.proto`. Includes `Makefile`
+  (`make lint`, `make generate-protos`) and `Dockerfile`.
 - **grpc/go/** — committed generated Go protobuf/gRPC/gateway code:
-  `{deposits,integrations,clients,transactions}grpc/`, `commongrpc/`.
+  `{clients,transactions,deposits,integrations}grpc/`, `commongrpc/`.
+- **shared/** — shared platform infrastructure (non-business):
+  `shared/logger`, `shared/database`, `shared/observability`.
 - **third_party/googleapis/** — external protobuf dependency (submodule).
   Never inspect recursively.
-- **docs/** — architecture documents and the transactions/platform review
-  documents (`docs/transactions-*.md`, `docs/platform-repository-audit.md`).
-- **clients/docs/** — Clients Service review documents
-  (`clients/docs/production-readiness-review.md`, etc.).
-- **deploy/** — OCI (`.git/` deploy?) and Render deployment documentation:
-  `deploy/README.md`, `deploy/render/README.md`.
-- **nginx/** — TLS termination config for OCI (`nginx.conf`).
+- **docs/** — architecture documents and the platform review documents
+  (`docs/platform-*.md`).
+- **clients/docs/** — Clients Service review documents.
+- **deploy/** — OCI and Render deployment documentation.
+- **nginx/** — TLS termination config for OCI.
 - **tools/versions.md** — pinned toolchain versions used by CI.
-- **Shared/platform code:** none yet — no `shared/`, `pkg/`, `internal/`,
-  `common/`, `middleware/`, `config/`, `logging/`, `errors/`, or `auth/`
-  directory exists at the repository root. This is the primary Platform gap.
+- **render.yaml** — Render Blueprint (3 web services + 3 managed PostgreSQL).
+- **.github/workflows/** — Render pipeline (active) and OCI pipeline (disabled).
 
-## Current Architecture
+## Current Implementation State
 
-- **Clients Service** (`clients/`) — IMPLEMENTED and PRODUCTION-REVIEWED
-  (`clients/docs/production-readiness-review.md`): Clients, Platforms,
-  Integrations, OAuth, Webhooks via unified Provider interface; gRPC +
-  gateway; PostgreSQL; zerolog; config; Docker; tests.
-- **Transactions Service** (`transactions/`) — IMPLEMENTED and
-  PRODUCTION-REVIEWED (`docs/transactions-production-review.md` — decision
-  READY WITH CONDITIONS): Merchants, Customers, Deposits, Payouts; gRPC +
-  gateway; PostgreSQL; zerolog; config; Docker; tests.
-- **Platform infrastructure** — IN PROGRESS. Agent 01 (Repository Audit)
-  complete; agents 02–12 not started. No shared/common packages yet.
+The repository is a Go microservices monorepo with four runnable services plus
+shared platform infrastructure. The cumulative implementation through Platform
+09 is:
+
+- **Foundation** — COMPLETE: domain model, repository layout, protobuf
+  strategy, migration plan (`docs/00-foundation`, `docs/`).
+- **Clients Service** — COMPLETE and production-reviewed
+  (`clients/docs/production-readiness-review.md`, READY WITH WARNINGS).
+- **Transactions Service** — COMPLETE and production-reviewed
+  (`docs/transactions-production-review.md`, READY WITH CONDITIONS).
+- **Platform** — Agents 01–09 COMPLETE; Agents 10–12 NOT STARTED.
 - **PostgreSQL** — IMPLEMENTED as the only datastore (pgxpool per service;
-  goose not used — golang-migrate used via `repo.Migrate`).
-- **protobuf/gRPC** — IMPLEMENTED across all services; deterministic
-  generation via `protobuf/Makefile` and per-service `go:generate`
-  (sqlc@v1.29.0, mockgen v0.6.0).
+  golang-migrate up/down per service; sqlc v1.29.0).
+- **Protobuf/gRPC** — IMPLEMENTED across all services; deterministic
+  generation via `protobuf/Makefile`; committed generated output.
 - **HTTP gateway** — IMPLEMENTED per service (grpc-gateway v2 + `/healthz`),
-  duplicated in each service's `main.go` (platform integration pending).
+  embedded in each service's `main.go`.
+- **Shared packages** — IMPLEMENTED: `shared/logger`, `shared/database`,
+  `shared/observability` (used by Clients and Transactions).
+- **Observability** — IMPLEMENTED: zerolog JSON, `X-Request-ID` correlation,
+  gRPC unary logging interceptor, HTTP access-log middleware, `/healthz` +
+  gRPC health. Metrics/tracing NOT implemented (no documented requirement).
 - **Provider integrations** — PLANNED/IN PROGRESS for Deposits/Payouts:
-  Transactions currently operates on the internal transaction model only;
-  PawaPay client exists and is wired only in the legacy Deposits service.
-- **OAuth / Webhooks** — IMPLEMENTED in Clients (GoHighLevel OAuth + webhooks).
+  Transactions operates on the internal transaction model only; PawaPay client
+  exists and is wired only in the legacy Deposits service.
+- **OAuth / Webhooks** — IMPLEMENTED in Clients (HighLevel OAuth + webhooks)
+  and legacy Integrations.
 - **Background processing / queues** — PLANNED/NOT PRESENT. No workers, no
   polling, no reconciliation jobs exist.
 
-## Implementation Status
+## Service Status
 
-| Area | Status | Location | Notes |
-| ---- | ------ | -------- | ----- |
-| Foundation docs | ✅ Complete | docs/ | domain, layout, protobuf strategy, migration plan, 00-foundation |
-| Clients | ✅ Complete | clients/ | Agents 01–12 done; review: `clients/docs/production-readiness-review.md` (READY WITH WARNINGS) |
-| Transactions | ✅ Complete | transactions/ | Agents 01–13 done; review: `docs/transactions-production-review.md` (READY WITH CONDITIONS) |
-| Platform | 🔄 Agent 01 done | docs/platform-repository-audit.md | Agents 02–12 not started; next is 02-protobuf-generation |
-| Database | ✅ Complete | deposits|integrations|clients|transactions/db/migrations | golang-migrate up/down per service |
-| SQLC | ✅ Complete | */db/query + sqlc | Deterministic; pinned v1.29.0 |
-| Protobuf | ✅ Complete (sources/generation) | protobuf/, grpc/go/ | 5 source files; committed generated output |
-| Runtime | ✅ Complete per service | */cmd/grpc-service/main.go | gRPC + gateway + healthz + graceful shutdown |
-| OAuth | ✅ Complete | clients/oauth | HighLevel OAuth |
-| Webhooks | ✅ Complete | clients/webhooks | HighLevel webhooks |
-| Tests | ✅ Service tests | clients/*/service_test.go, transactions/*/*_test.go | Race-clean; full suite passes |
-| Docker | ✅ Complete per service | */Dockerfile (multi-stage distroless) | Builds verified |
-| CI/CD | ✅ Render pipeline active; OCI disabled | .github/workflows/ | render-deploy.yml active; deploy.yml on workflow_dispatch only |
-| Render | ✅ Deposits only | render.yaml | Clients/Transactions not yet in Blueprint |
+### Clients Service
+
+- **Implementation status**: COMPLETE, production-reviewed (READY WITH
+  WARNINGS).
+- **Major components**: Clients, Platforms, Integrations, OAuth, Webhooks via
+  a unified Provider interface (`clients/providers`); gRPC + gateway;
+  PostgreSQL; zerolog; config; Docker; tests.
+- **Database**: COMPLETE — `clients/db` (migrations, query, sqlc, repo).
+- **Protobuf**: COMPLETE — `clientsgrpc` (`ClientsService`,
+  `PlatformsService`, `IntegrationsService`).
+- **Repository**: COMPLETE — `clients/db/repo` (sqlc-encapsulating repos).
+- **Service**: COMPLETE — `clients/service` (business logic, converters).
+- **OAuth**: COMPLETE — HighLevel OAuth flow (`clients/oauth`); token
+  encryption-at-rest hardening flagged in production review.
+- **Webhook**: COMPLETE — HighLevel webhook ingestion/persistence
+  (`clients/webhooks`); signature verification not yet enforced.
+- **Runtime**: COMPLETE — `clients/cmd/grpc-service/main.go` (gRPC + gateway +
+  healthz + graceful shutdown + observability).
+- **Tests**: COMPLETE — service tests + gateway wiring tests; race-clean.
+
+### Transactions Service
+
+- **Implementation status**: COMPLETE, production-reviewed (READY WITH
+  CONDITIONS).
+- **Database**: COMPLETE — `transactions/db` (migrations, query, sqlc, repo).
+- **SQLC**: COMPLETE — v1.29.0, committed generated code.
+- **Protobuf**: COMPLETE — `transactionsgrpc` (`MerchantService`,
+  `CustomerService`, `DepositService`, `PayoutService`).
+- **Repositories**: COMPLETE — `transactions/db/repo`.
+- **Merchants**: COMPLETE — `transactions/merchants`.
+- **Customers**: COMPLETE — `transactions/customers`.
+- **Deposits**: COMPLETE — `transactions/deposits` (initiate/get; provider
+  execution deferred).
+- **Payouts**: COMPLETE — `transactions/payouts` (request/get; not
+  customer-scoped).
+- **Runtime**: COMPLETE — `transactions/cmd/grpc-service/main.go` (gRPC +
+  gateway + healthz + graceful shutdown + observability).
+- **Tests**: COMPLETE — service tests + gateway wiring tests; race-clean.
+
+### Platform
+
+- **Platform 01 — Repository Audit**: COMPLETE
+  (`docs/platform-repository-audit.md`).
+- **Platform 02 — Protobuf Generation**: COMPLETE
+  (`docs/platform-protobuf-generation-review.md`).
+- **Platform 03 — HTTP Gateway**: COMPLETE
+  (`docs/platform-http-gateway-review.md`).
+- **Platform 04 — Common Packages**: COMPLETE
+  (`docs/platform-common-packages-review.md`).
+- **Platform 05 — CI/CD**: COMPLETE (`docs/platform-ci-cd-review.md`).
+- **Platform 06 — Docker**: COMPLETE (`docs/platform-docker-review.md`).
+- **Platform 07 — Render**: COMPLETE (`docs/platform-render-review.md`).
+- **Platform 08 — Documentation**: COMPLETE
+  (`docs/platform-documentation-review.md`).
+- **Platform 09 — Observability**: COMPLETE
+  (`docs/platform-observability-review.md`).
+- **Platform 10 — Security**: NOT STARTED.
+- **Platform 11 — Performance**: NOT STARTED.
+- **Platform 12 — Final Review**: NOT STARTED.
 
 ## Agent Progress
 
-### Clients
-01–12 — COMPLETE (`clients/docs/` review documents reference each agent).
-No further Clients work is pending.
-
-### Transactions
-01–13 — COMPLETE (`docs/transactions-*.md` review documents reference each agent).
-Final decision: READY WITH CONDITIONS.
-
-### Platform
-- 01 — COMPLETE (this session: `docs/platform-repository-audit.md`).
-- 02 — NEXT (protobuf generation).
-- 03–12 — PENDING (gateway, common packages, CI/CD, Docker, Render,
-  documentation, observability, security, performance, final review).
+| Area | Agent | Status | Notes |
+| ---- | ----- | ------ | ----- |
+| Foundation | 00-foundation (01–04) | COMPLETE | domain, layout, protobuf strategy, migration plan |
+| Clients | 01–12 | COMPLETE | production-reviewed (READY WITH WARNINGS) |
+| Transactions | 01–13 | COMPLETE | production-reviewed (READY WITH CONDITIONS) |
+| Platform | 01 Repository Audit | COMPLETE | `docs/platform-repository-audit.md` |
+| Platform | 02 Protobuf Generation | COMPLETE | `docs/platform-protobuf-generation-review.md` |
+| Platform | 03 HTTP Gateway | COMPLETE | `docs/platform-http-gateway-review.md` |
+| Platform | 04 Common Packages | COMPLETE | `docs/platform-common-packages-review.md` |
+| Platform | 05 CI/CD | COMPLETE | `docs/platform-ci-cd-review.md` |
+| Platform | 06 Docker | COMPLETE | `docs/platform-docker-review.md` |
+| Platform | 07 Render | COMPLETE | `docs/platform-render-review.md` |
+| Platform | 08 Documentation | COMPLETE | `docs/platform-documentation-review.md` |
+| Platform | 09 Observability | COMPLETE | `docs/platform-observability-review.md` |
+| Platform | 10 Security | NOT STARTED | next agent |
+| Platform | 11 Performance | NOT STARTED | |
+| Platform | 12 Final Review | NOT STARTED | |
 
 ## Current Work
 
-The repository checkpoint was created immediately after completing **Platform
-Agent 01 (Repository Audit)**. The audit report
-(`docs/platform-repository-audit.md`) was the last deliverable produced and
-the working tree is clean apart from the new audit document (now committed
-state as of checkpoint creation). The current agent sequence is **Platform**;
-agent 01 is done and agent 02 is the next task.
+The repository confirms Platform 09 is complete (commit `55b3e4a
+09-observability`; `docs/platform-observability-review.md` exists; the
+`shared/observability` package is implemented and adopted in Clients and
+Transactions).
+
+**Platform 09 — Observability — COMPLETE**
+
+The next logical unfinished agent is:
+
+**agents/platform/10-security.md**
 
 ## Next Action
 
-Read:
+The next implementation task is:
 
-agents/platform/02-protobuf-generation.md
+**agents/platform/10-security.md**
 
-Then continue the Platform implementation according to that agent's
-directives, using the baseline in `docs/platform-repository-audit.md`.
+The next Cline session should read the authoritative project files (README.md,
+agents/project-context.md, docs/domain-model.md, docs/repository-layout.md,
+docs/protobuf-strategy.md, docs/migration-plan.md, and the relevant platform
+reviews) followed by the Platform 10 agent instructions before making changes.
+
+## Rules for Continuing
+
+1. README.md is the repository map.
+2. agents/project-context.md contains persistent technical/project conventions.
+3. The foundation docs are authoritative for architecture and migration
+   decisions.
+4. Follow the active agent's directives.
+5. Do not overwrite existing working code.
+6. Do not perform unrelated refactoring.
+7. Do not redesign architecture unless explicitly instructed.
+8. Inspect only relevant directories.
+9. Do not waste time recursively exploring third_party/googleapis.
+10. Do not manually modify generated protobuf code.
+11. Do not manually modify generated SQLC code.
+12. Follow existing project conventions.
+13. Run appropriate tests.
+14. Review changes before completing an agent.
+15. Update relevant documentation when required.
+16. Treat actual repository state as the final source of truth.
 
 ## Known Issues
 
-- No shared/common package directory exists (config/logger/db/gateway
-  bootstrap is duplicated across the four services) — Platform agent 04.
-- `make test` is broken in deposits/, integrations/, and clients/ Makefiles
-  (broken `find | xargs` variant); transactions/ uses a working
-  `go test ./... --cover` — Platform agent 05.
-- CI sqlc verification (`render-deploy.yml`) scopes `git diff --exit-code` to
-  `deposits/db/sqlc` only; clients/transactions sqlc drift is not explicitly
-  verified — Platform agent 05.
-- render.yaml deploys only the legacy Deposits service; Clients/Transactions
-  not yet deployable via Render — Platform agent 07.
-- No authentication middleware in any service; no metrics/tracing/request
-  IDs — Platform agents 10, 09.
+- No compilation failures, failing tests, or migration problems are known at
+  this checkpoint; the repository builds and the test suite passes.
 - Transactions production review documented HIGH findings (F-01 provider
-  execution/reconciliation, F-02 client_id cross-service validation,
-  F-03 no auth) and MEDIUM findings (pagination, lifecycle RPCs, fee entity,
+  execution/reconciliation, F-02 client_id cross-service validation, F-03 no
+  auth) and MEDIUM findings (pagination, lifecycle RPCs, fee entity,
   idempotency exposure) — consciously deferred; see
   `docs/transactions-production-review.md`.
 - Clients production review documented HIGH/MEDIUM findings (OAuth token
   encryption at rest, redirect URI config wiring, webhook dedup) — see
   `clients/docs/production-readiness-review.md`.
-- There is no `shared/` platform directory yet; any extraction must not be
-  invented — it must follow Platform agent 04 directives.
+- No authentication/authorization middleware in any service (Platform 10).
+- No metrics/tracing/request-ID-based distributed tracing (request IDs exist;
+  metrics/tracing deferred — Platform 11/12).
+- Render free tier includes one managed PostgreSQL; the Blueprint defines three
+  databases (one per service), which requires a paid plan (documented fallback
+  in `deploy/render/README.md`).
+- OCI GitHub Actions pipeline (`deploy.yml`) is intentionally disabled.
+- Legacy `deposits/` and `integrations/` services remain runnable and are not
+  deleted; they retain their pre-existing (non-shared) infrastructure.
 
 ## Important Decisions
 
@@ -190,120 +265,68 @@ directives, using the baseline in `docs/platform-repository-audit.md`.
   have no status-mutation RPC yet; provider execution and status
   reconciliation are future integration work.
 - **Transactions payouts are not customer-scoped** (client + merchant only).
+- **Shared packages are non-business infrastructure.** `shared/logger`,
+  `shared/database`, `shared/observability` never import service packages;
+  business logic stays in the owning service.
+- **Observability conventions.** zerolog JSON to stdout/stderr; `X-Request-ID`
+  correlation (HTTP header + gRPC metadata); gRPC unary logging interceptor +
+  HTTP access-log middleware; `/healthz` + gRPC health; metrics/tracing not
+  implemented (no documented requirement).
+- **Render Blueprint** deploys three web services (deposits, clients,
+  transactions), each with its own managed PostgreSQL; manual secrets are
+  `sync: false`.
 - **Agent files are the working instructions.** Keep all `agents/` files; they
   are the directives the platform agents execute, and they must not be
   deleted or "cleaned up" during implementation.
 
-## Rules for Continuing Work
+## Recently Completed
 
-1. Read README.md first.
-2. Read agents/project-context.md before modifying code.
-3. Read the relevant foundation documentation.
-4. Follow the current agent's directives.
-5. Treat the repository as the source of truth.
-6. Do not overwrite existing working code.
-7. Do not perform unrelated refactoring.
-8. Do not redesign architecture unless explicitly instructed.
-9. Do not inspect unnecessary deep directories.
-10. Do not recursively inspect third_party/googleapis.
-11. Do not manually modify generated protobuf code.
-12. Do not manually modify generated SQLC code.
-13. Regenerate generated code using the project's established commands.
-14. Do not rewrite existing migrations unless explicitly instructed.
-15. Do not use destructive git commands.
-16. Preserve existing project conventions.
-17. Run appropriate tests after implementation.
-18. Review changes before completing the task.
-19. Update relevant documentation when the agent requires it.
-20. Do not assume something is implemented merely because documentation exists.
-21. Verify implementation against the actual repository.
+- Clients service implementation completed through its final production
+  review (`clients/docs/production-readiness-review.md`).
+- Transactions service implementation completed through its final production
+  review (`docs/transactions-production-review.md`).
+- Platform repository audit completed (`docs/platform-repository-audit.md`).
+- Platform protobuf generation completed
+  (`docs/platform-protobuf-generation-review.md`).
+- Platform HTTP gateway completed (`docs/platform-http-gateway-review.md`).
+- Platform common packages completed (`docs/platform-common-packages-review.md`).
+- Platform CI/CD completed (`docs/platform-ci-cd-review.md`).
+- Platform Docker configuration completed (`docs/platform-docker-review.md`).
+- Platform Render configuration completed (`docs/platform-render-review.md`).
+- Platform documentation completed (`docs/platform-documentation-review.md`).
+- Platform observability completed (`docs/platform-observability-review.md`).
 
-## New Cline Session Reading Order
+## Current Repository State
 
-Specify this exact order:
+- `git status --short`: clean (the separately-updated `agents/project-context.md`
+  has been committed by the user).
+- `git log --oneline -10` (HEAD on `platform-cleanup`):
+  - `7309c13` (HEAD) — project-context update (committed by user)
+  - `55b3e4a 09-observability`
+  - `0c0b65a 08-documentation`
+  - `c2c13b8 07-render`
+  - `a2c3d73 06-docker`
+  - `f2b341d 05-ci-cd`
+  - `397b41f 04-common-packages`
+  - `a020431 03-http-gateway`
+  - `59f9616 project-checkpoint and chat change`
+  - `5a79f21 01-repsitory-audit`
+- Generated files (`grpc/go/*`, `*sqlc*`, `*mocks*`) are committed and should
+  only change via regeneration; do not edit by hand.
 
-### First
+## New Cline Session Handoff
 
-README.md
+Start by reading README.md, agents/project-context.md, docs/project-checkpoint.md,
+and the relevant foundation documents (docs/domain-model.md,
+docs/repository-layout.md, docs/protobuf-strategy.md, docs/migration-plan.md).
+Then read the active agent file (agents/platform/10-security.md). Do not rely
+on the previous Cline conversation. Treat the repository and these documents
+as the source of truth.
 
-### Second
+Current completed endpoint:
 
-agents/project-context.md
+**Platform 09 — Observability**
 
-### Third
+Next task:
 
-docs/domain-model.md
-
-docs/repository-layout.md
-
-docs/protobuf-strategy.md
-
-docs/migration-plan.md
-
-### Fourth
-
-The current agent file (agents/platform/02-protobuf-generation.md).
-
-### Fifth
-
-Only the implementation files relevant to the current agent
-(docs/platform-repository-audit.md for the Platform baseline, plus the
-protobuf/grpc files the agent will touch).
-
-### Sixth
-
-Relevant review/checkpoint documentation (this file,
-docs/platform-repository-audit.md).
-
-Do not recursively explore the repository before determining which files are
-relevant.
-
-## Previous Work
-
-- Foundation implemented: domain model, repository layout, protobuf
-  strategy, migration plan (docs/00-foundation).
-- Clients Service fully implemented and reviewed (Agents 01–12): client/
-  platform/integration/oauth/webhook domain, unified Provider interface,
-  gRPC + gateway, PostgreSQL, Docker, tests.
-- Transactions Service fully implemented and reviewed (Agents 01–13):
-  database, SQLC, protobuf, repositories, merchants, customers, deposits,
-  payouts, runtime, scaffolding, tests; final decision READY WITH CONDITIONS.
-- Generated code is committed and reproducible: protobuf (5 contracts),
-  gRPC stubs, gateway stubs, SQLC, mocks.
-- Legacy deposits/ and integrations/ services remain runnable.
-- Platform audit completed: baseline documented, findings assigned to
-  agents 02–12.
-
-## Recently Modified Files
-
-Use `git status` and `git diff` at the current commit. The most recent
-documented deliverable before this checkpoint is:
-- docs/platform-repository-audit.md (Platform Agent 01).
-
-Prior milestones (committed on the merged Transactions branch, now on `main`/
-`platform-cleanup`):
-- docs/transactions-production-review.md
-- docs/transactions-tests-review.md
-- docs/transactions-scaffolding-review.md
-- transactions/ scaffolding + runtime + services + db (all committed)
-- clients/docs/*.md (Clients reviews, committed)
-- clients/ implementation (committed)
-
-Generated files (grpc/go/*, *sqlc*, *mocks*) are committed and should only
-change via regeneration; do not edit by hand.
-
-## Do Not Trust This Checkpoint Blindly
-
-"The checkpoint is a navigation and handoff document, not the ultimate source
-of truth. When the checkpoint conflicts with the actual repository, README.md,
-project documentation, or current source code, verify the repository and
-authoritative documentation before proceeding."
-
-## Checkpoint Maintenance
-
-- Update this document when a major agent completes.
-- Update the Current Work section when changing tasks.
-- Update Known Issues when blockers are resolved.
-- Update Next Action when the active agent changes.
-- Do not allow this file to become a duplicate README or architecture
-  document.
+**Platform 10 — Security**
