@@ -7,6 +7,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY clients ./clients
+COPY shared ./shared
 COPY grpc ./grpc
 COPY protobuf ./protobuf
 

@@ -12,7 +12,8 @@ type MerchantRepo interface {
 	Create(ctx context.Context, name, slug string, status sqlc.MerchantStatus) (sqlc.Merchant, error)
 	GetByID(ctx context.Context, id uuid.UUID) (sqlc.Merchant, error)
 	GetBySlug(ctx context.Context, slug string) (sqlc.Merchant, error)
-	List(ctx context.Context) ([]sqlc.Merchant, error)
+	List(ctx context.Context, limit, offset int32) ([]sqlc.Merchant, error)
+	Count(ctx context.Context) (int64, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status sqlc.MerchantStatus) (sqlc.Merchant, error)
 }
 
@@ -53,12 +54,23 @@ func (r *merchantRepo) GetBySlug(ctx context.Context, slug string) (sqlc.Merchan
 	return merchant, nil
 }
 
-func (r *merchantRepo) List(ctx context.Context) ([]sqlc.Merchant, error) {
-	merchants, err := r.q.ListMerchants(ctx)
+func (r *merchantRepo) List(ctx context.Context, limit, offset int32) ([]sqlc.Merchant, error) {
+	merchants, err := r.q.ListMerchants(ctx, sqlc.ListMerchantsParams{
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
 		return nil, wrapError(err)
 	}
 	return merchants, nil
+}
+
+func (r *merchantRepo) Count(ctx context.Context) (int64, error) {
+	count, err := r.q.CountMerchants(ctx)
+	if err != nil {
+		return 0, wrapError(err)
+	}
+	return count, nil
 }
 
 func (r *merchantRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status sqlc.MerchantStatus) (sqlc.Merchant, error) {

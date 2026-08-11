@@ -7,9 +7,9 @@ import (
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/clients/db/sqlc"
 	"github.com/I-Frostbyte/rvpay-go/clients/providers"
-	"github.com/rs/zerolog"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/rs/zerolog"
 )
 
 // Service manages webhook lifecycle for provider integrations.

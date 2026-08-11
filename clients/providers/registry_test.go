@@ -1,6 +1,10 @@
 package providers
 
 import (
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -18,7 +22,7 @@ func TestProviderRegistry(t *testing.T) {
 	}
 
 	// Test registration
-	provider := NewHighLevelProvider("client-id", "client-secret", "https://example.com/callback")
+	provider := NewHighLevelProvider("client-id", "client-secret", "https://example.com/callback", "webhook-secret")
 	registry.Register(provider)
 
 	if got := len(registry.List()); got != 1 {
@@ -75,11 +79,53 @@ func TestProviderRegistry(t *testing.T) {
 	}
 
 	// Test duplicate registration (should overwrite)
-	provider2 := NewHighLevelProvider("client-id-2", "client-secret-2", "https://example.com/callback2")
+	provider2 := NewHighLevelProvider("client-id-2", "client-secret-2", "https://example.com/callback2", "webhook-secret-2")
 	registry.Register(provider2)
 	if got := len(registry.List()); got != 1 {
 		t.Fatalf("registry should still have 1 provider after duplicate registration, got %d", got)
 	}
 
 	logger.Info().Msg("provider registry tests passed")
+}
+
+func TestHighLevelWebhookSecretIsUsedForSignatureVerification(t *testing.T) {
+	t.Parallel()
+
+	// SECURITY REGRESSION TEST (SEC-03): the webhook signature must be verified
+	// with the distinct webhook secret (WEBHOOK_SECRET), never the OAuth client
+	// secret. A signature computed with the webhook secret must verify; a
+	// signature computed with the client secret must be rejected.
+	clientSecret := "oauth-client-secret"
+	webhookSecret := "distinct-webhook-secret"
+	provider := NewHighLevelProvider("client-id", clientSecret, "https://example.com/callback", webhookSecret)
+
+	whp := provider.WebhookProvider()
+	if whp == nil {
+		t.Fatal("webhook provider should not be nil")
+	}
+
+	body := []byte(`{"eventId":"evt_1","eventType":"integration.installed"}`)
+	timestamp := "1720000000"
+
+	sign := func(secret string) string {
+		h := hmac.New(sha256.New, []byte(secret))
+		h.Write([]byte(timestamp + string(body)))
+		return hex.EncodeToString(h.Sum(nil))
+	}
+
+	headers := map[string]string{
+		"X-HighLevel-Signature": sign(webhookSecret),
+		"X-HighLevel-Timestamp": timestamp,
+	}
+	if err := whp.VerifyRequest(context.Background(), headers, body); err != nil {
+		t.Fatalf("signature with the webhook secret must verify, got error: %v", err)
+	}
+
+	badHeaders := map[string]string{
+		"X-HighLevel-Signature": sign(clientSecret),
+		"X-HighLevel-Timestamp": timestamp,
+	}
+	if err := whp.VerifyRequest(context.Background(), badHeaders, body); err == nil {
+		t.Fatal("signature with the OAuth client secret must be rejected")
+	}
 }

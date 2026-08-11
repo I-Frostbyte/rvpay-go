@@ -6,14 +6,14 @@ import (
 
 // WebhookEvent represents a normalized webhook event from any provider.
 type WebhookEvent struct {
-	Provider     string
-	EventType    string
+	Provider        string
+	EventType       string
 	ProviderEventID string
-	IntegrationID string
-	ClientID     string
-	PlatformID   string
-	Payload      map[string]interface{}
-	ReceivedAt   int64
+	IntegrationID   string
+	ClientID        string
+	PlatformID      string
+	Payload         map[string]interface{}
+	ReceivedAt      int64
 }
 
 // WebhookProvider defines webhook operations for a provider.

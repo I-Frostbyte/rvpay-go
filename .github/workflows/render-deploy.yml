@@ -1,14 +1,15 @@
-# Render delivery pipeline: generate code, test Go, build the Docker image,
-# then trigger a Render deploy via its deploy hook.
+# Render delivery pipeline: generate code, validate Go, test Go, build the
+# Docker images, then trigger a Render deploy via its deploy hook.
 #
-# Pipeline order (per render-generator.md):
+# Pipeline order:
 #   1. go generate
 #   2. protoc generation
 #   3. sqlc generation
-#   4. tests
-#   5. Docker build
-#   6. Render deployment
-#
+#   4. generated-code drift verification
+#   5. format/static/build validation
+#   6. tests
+#   7. Docker build (deposits (removed), clients, transactions)
+#   8. Render deployment
 # The existing .github/workflows/deploy.yml targets OCI and is left untouched.
 name: Deploy to Render
 
@@ -30,6 +31,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26.5"
+          cache: true
       - name: Install protoc toolchain
         run: |
           sudo apt-get update
@@ -45,17 +47,54 @@ jobs:
           cd protobuf
           make generate-protos
           cd ..
-      - name: sqlc generation
+      - name: sqlc generation (clients & transactions)
         run: |
-          cd deposits/db
+          cd clients/db
+          go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 generate
+          cd ../..
+          cd transactions/db
           go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 generate
           cd ../..
       - name: Verify generated code is current
         run: |
-          git diff --exit-code grpc/go deposits/db/sqlc deposits/db/repo/mocks deposits/db/sqlc/mocks || {
-            echo "Generated code is out of date. Commit the generated output."
+          # Protobuf, gRPC, and gateway output.
+          if ! git diff --exit-code grpc/go; then
+            echo "::error::Generated protobuf code is out of date."
+            echo "Run 'cd protobuf && make generate-protos' and commit the generated files."
             exit 1
-          }
+          fi
+          # sqlc and mock output for active services (deposits removed)
+          if ! git diff --exit-code \
+            clients/db/sqlc clients/db/repo/mocks clients/db/sqlc/mocks \
+            transactions/db/sqlc transactions/db/repo/mocks transactions/db/sqlc/mocks; then
+            echo "::error::Generated sqlc or mock code is out of date."
+            echo "Run 'go generate ./...' and commit the generated files."
+            exit 1
+          fi
+
+  validate:
+    needs: generate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.5"
+          cache: true
+      - name: Check formatting (hand-written Go only)
+        run: |
+          unformatted=$(gofmt -l $(git ls-files '*.go' | grep -v -E 'grpc/go/|/db/sqlc/|/mocks/|\.pb\.go$|\.pb\.gw\.go$'))
+          if [ -n "$unformatted" ]; then
+            echo "::error::The following files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Run go vet
+        run: go vet ./...
+      - name: Build all services
+        run: go build ./...
 
   test:
     needs: generate
@@ -67,30 +106,35 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26.5"
+          cache: true
       - name: Run tests
         run: go test ./...
 
   docker-build:
-    needs: test
+    needs: validate
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [clients, transactions] # REMOVED: deposits
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Build Docker image
-        run: docker build -f deposits/Dockerfile -t rvpay-deposits:ci .
+      - name: Build Docker image (${{ matrix.service }})
+        run: docker build -f ${{ matrix.service }}/Dockerfile -t rvpay-${{ matrix.service }}:ci .
 
   deploy:
     needs: docker-build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Trigger Render deploy
+      - name: Trigger Render Blueprint Sync
         env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          RENDER_BLUEPRINT_HOOK: ${{ secrets.RENDER_BLUEPRINT_HOOK }}
         run: |
-          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
-            echo "RENDER_DEPLOY_HOOK secret is not set. Skipping deploy."
+          if [ -z "$RENDER_BLUEPRINT_HOOK" ]; then
+            echo "::notice::Render deploy skipped: RENDER_BLUEPRINT_HOOK secret is not set."
             exit 0
           fi
-          curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
+          curl -fsS -X POST "$RENDER_BLUEPRINT_HOOK"

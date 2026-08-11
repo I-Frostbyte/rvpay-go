@@ -1,8 +1,8 @@
 package merchants
 
 import (
-	"github.com/I-Frostbyte/rvpay-go/transactions/db/sqlc"
 	transactionsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpc"
+	"github.com/I-Frostbyte/rvpay-go/transactions/db/sqlc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

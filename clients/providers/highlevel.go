@@ -15,25 +15,33 @@ import (
 
 // HighLevelProvider implements the unified Provider interface for HighLevel.
 type HighLevelProvider struct {
-	clientID     string
-	clientSecret string
-	redirectURI  string
-	authURL      string
-	tokenURL     string
-	userInfoURL  string
-	scopes       []string
+	clientID      string
+	clientSecret  string
+	webhookSecret string
+	redirectURI   string
+	authURL       string
+	tokenURL      string
+	userInfoURL   string
+	scopes        []string
+	httpClient    *http.Client
 }
 
-// NewHighLevelProvider creates a new HighLevel provider.
-func NewHighLevelProvider(clientID, clientSecret, redirectURI string) *HighLevelProvider {
+// NewHighLevelProvider creates a new HighLevel provider. webhookSecret is the
+// distinct secret used to verify HighLevel webhook signatures (WEBHOOK_SECRET);
+// it must not reuse the OAuth client secret.
+func NewHighLevelProvider(clientID, clientSecret, redirectURI, webhookSecret string) *HighLevelProvider {
 	return &HighLevelProvider{
-		clientID:     clientID,
-		clientSecret: clientSecret,
-		redirectURI:  redirectURI,
-		authURL:      "https://api.highlevel.com/oauth/authorize",
-		tokenURL:     "https://api.highlevel.com/oauth/token",
-		userInfoURL:  "https://api.highlevel.com/v1/users/me",
-		scopes:       []string{"read", "write"},
+		clientID:      clientID,
+		clientSecret:  clientSecret,
+		webhookSecret: webhookSecret,
+		redirectURI:   redirectURI,
+		authURL:       "https://api.highlevel.com/oauth/authorize",
+		tokenURL:      "https://api.highlevel.com/oauth/token",
+		userInfoURL:   "https://api.highlevel.com/v1/users/me",
+		scopes:        []string{"read", "write"},
+		// A single shared client is reused across all provider calls so HTTP
+		// connections are pooled and reused rather than recreated per request.
+		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -69,7 +77,7 @@ func (p *HighLevelProvider) OAuthProvider() OAuthProvider {
 }
 
 func (p *HighLevelProvider) WebhookProvider() WebhookProvider {
-	return &HighLevelWebhookProvider{webhookSecret: p.clientSecret}
+	return NewHighLevelWebhookProvider(p.webhookSecret)
 }
 
 func (p *HighLevelProvider) GenerateAuthorizationURL(ctx context.Context, state string, redirectURI string) (string, error) {
@@ -103,8 +111,7 @@ func (p *HighLevelProvider) ExchangeCode(ctx context.Context, code string, redir
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("token request failed: %w", err)
 	}
@@ -153,8 +160,7 @@ func (p *HighLevelProvider) RefreshToken(ctx context.Context, refreshToken strin
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("refresh request failed: %w", err)
 	}
@@ -197,8 +203,7 @@ func (p *HighLevelProvider) GetUserInfo(ctx context.Context, accessToken string)
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("user info request failed: %w", err)
 	}

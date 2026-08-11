@@ -98,6 +98,21 @@ func (m *MockMerchantRepo) EXPECT() *MockMerchantRepoMockRecorder {
 	return m.recorder
 }
 
+// Count mocks base method.
+func (m *MockMerchantRepo) Count(ctx context.Context) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Count", ctx)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Count indicates an expected call of Count.
+func (mr *MockMerchantRepoMockRecorder) Count(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Count", reflect.TypeOf((*MockMerchantRepo)(nil).Count), ctx)
+}
+
 // Create mocks base method.
 func (m *MockMerchantRepo) Create(ctx context.Context, name, slug string, status sqlc.MerchantStatus) (sqlc.Merchant, error) {
 	m.ctrl.T.Helper()
@@ -144,18 +159,18 @@ func (mr *MockMerchantRepoMockRecorder) GetBySlug(ctx, slug any) *gomock.Call {
 }
 
 // List mocks base method.
-func (m *MockMerchantRepo) List(ctx context.Context) ([]sqlc.Merchant, error) {
+func (m *MockMerchantRepo) List(ctx context.Context, limit, offset int32) ([]sqlc.Merchant, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "List", ctx)
+	ret := m.ctrl.Call(m, "List", ctx, limit, offset)
 	ret0, _ := ret[0].([]sqlc.Merchant)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // List indicates an expected call of List.
-func (mr *MockMerchantRepoMockRecorder) List(ctx any) *gomock.Call {
+func (mr *MockMerchantRepoMockRecorder) List(ctx, limit, offset any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockMerchantRepo)(nil).List), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockMerchantRepo)(nil).List), ctx, limit, offset)
 }
 
 // UpdateStatus mocks base method.

@@ -1,36 +1,38 @@
-# Agent 02 — Protobuf Generation
+# Agent 03 — HTTP Gateway
 
 ## Objective
 
-Establish a correct, reproducible, repository-consistent protobuf generation system for RVPay.
+Implement and validate the HTTP gateway layer for the new RVPay platform architecture.
 
-This agent is responsible for the protobuf generation TOOLCHAIN and WORKFLOW.
+The gateway must expose the documented HTTP API for the protobuf-defined services while preserving the existing gRPC service architecture.
 
-It must ensure that:
+The gateway must:
 
-- protobuf source files are located correctly
-- protoc is invoked correctly
-- protoc-gen-go is invoked correctly
-- protoc-gen-go-grpc is invoked correctly
-- protoc-gen-grpc-gateway is invoked correctly where required
-- googleapis dependencies are resolved correctly
-- generated Go code is placed in the correct locations
-- generation is reproducible
-- local generation and CI generation use the same versions
-- generated output remains synchronized with protobuf source
-- Clients and Transactions protobuf contracts can be generated consistently
+- use the protobuf contracts as the source of truth
+- use grpc-gateway where specified by the protobuf strategy
+- route HTTP requests to the appropriate gRPC services
+- preserve the service boundaries defined by the architecture
+- use the generated gateway code from the protobuf generation pipeline
+- avoid duplicating business logic
+- avoid creating HTTP-specific business implementations
+- fit the existing repository structure
+- be compatible with the Clients and Transactions services
+- remain suitable for deployment behind the platform's eventual infrastructure
 
-This agent is NOT responsible for implementing the HTTP gateway.
+This agent is responsible for the HTTP gateway implementation and wiring.
 
-That belongs to:
+It is NOT responsible for:
 
-agents/platform/03-http-gateway.md
-
-This agent is NOT responsible for redesigning protobuf contracts.
-
-This agent is NOT responsible for designing business-domain messages.
-
-This agent is responsible for making the existing documented protobuf strategy executable and reproducible.
+- business logic
+- database logic
+- repository implementation
+- OAuth implementation
+- webhook business processing
+- CI/CD
+- Docker
+- Render configuration
+- observability implementation
+- security hardening beyond gateway-specific correctness
 
 ---
 
@@ -45,10 +47,11 @@ Read only:
 - docs/protobuf-strategy.md
 - docs/migration-plan.md
 - docs/platform-repository-audit.md
+- docs/platform-protobuf-generation-review.md
 
-The first six documents are mandatory.
+The first seven documents are mandatory.
 
-The Platform audit is mandatory because Agent 01 establishes the current repository state and identifies existing protobuf tooling.
+The protobuf generation review is mandatory because Agent 02 establishes the generated protobuf and gateway artifacts that this agent must consume.
 
 ---
 
@@ -56,7 +59,7 @@ The Platform audit is mandatory because Agent 01 establishes the current reposit
 
 Before starting:
 
-confirm that all required documents exist and can be read.
+verify that every required document exists.
 
 Required:
 
@@ -67,14 +70,21 @@ Required:
 - docs/protobuf-strategy.md
 - docs/migration-plan.md
 - docs/platform-repository-audit.md
+- docs/platform-protobuf-generation-review.md
 
-At the end:
+If the protobuf generation review does not exist:
 
-perform the check again.
+STOP.
 
-Record the result in the review document:
+Do not recreate Agent 02's work.
 
-docs/platform-protobuf-generation-review.md
+At the end of the task:
+
+perform the documentation check again.
+
+Record the result in:
+
+docs/platform-http-gateway-review.md
 
 ---
 
@@ -92,27 +102,27 @@ as the repository map.
 
 Use:
 
-docs/protobuf-strategy.md
+docs/repository-layout.md
 
-as the primary source for protobuf architecture.
+for the intended structure.
 
 Use:
 
-docs/repository-layout.md
+docs/protobuf-strategy.md
 
-for expected locations.
+for API and gateway architecture.
+
+Use:
+
+docs/platform-protobuf-generation-review.md
+
+for the actual generated protobuf/gateway state.
 
 Use:
 
 agents/project-context.md
 
-for project conventions.
-
-Use:
-
-docs/platform-repository-audit.md
-
-for the known current state.
+for coding and package conventions.
 
 ---
 
@@ -135,1007 +145,1161 @@ DO NOT recursively inspect:
 
 third_party/googleapis/
 
-The googleapis directory is a dependency.
+The gateway agent only needs to consume generated gateway artifacts and protobuf definitions.
 
-Only verify that the required dependency exists and that the protobuf compiler can resolve imports from it.
-
-If a specific googleapis file is required by an active `.proto` import:
-
-inspect only that specific file if necessary.
+If an import requires a specific Google API definition, rely on Agent 02's verification rather than exploring the dependency tree.
 
 ---
 
 # Scope Restrictions
 
-This agent may modify only files directly related to protobuf generation.
+This agent may modify only files directly required for HTTP gateway implementation and its documentation.
 
-Potentially relevant files include:
+Potentially relevant areas include:
 
-- `.proto` source files, only when generation metadata or options are incorrect
-- protobuf Makefiles
-- generation scripts
-- root Makefile generation targets
-- tool version documentation
-- generation configuration
-- generated protobuf output
-- generated gRPC output
-- generated gateway output if the existing strategy requires it
+- gateway command/package
+- gateway runtime wiring
+- gateway registration
+- gateway configuration
+- protobuf HTTP annotations if a documented correction is necessary
+- Makefile targets directly required to run the gateway
+- platform documentation
 
 Do NOT modify:
 
-- business service implementations
+- Clients business logic
+- Transactions business logic
 - repositories
 - migrations
 - SQL
+- generated `.pb.go` files manually
+- generated gateway files manually
+- CI workflows
 - Dockerfiles
 - Render configuration
-- CI workflows unless absolutely required to keep generation reproducible
+- observability packages
+- security architecture
 
-If CI changes are necessary, document them for Agent 05 instead of implementing them unless the change is trivial and directly required by the generation contract.
+If a required change belongs to another agent:
+
+document it.
+
+Do not take over that agent's work.
 
 ---
 
-# 1. Read the Existing Protobuf Strategy
+# 1. Read the Protobuf Strategy
 
 Read:
 
 docs/protobuf-strategy.md
 
-Treat this document as authoritative for the intended protobuf architecture.
+Determine:
 
-Extract:
+- whether grpc-gateway is required
+- which services are exposed over HTTP
+- HTTP endpoint conventions
+- HTTP method conventions
+- path conventions
+- request/response mapping
+- error handling expectations
+- gateway registration strategy
+- gateway package location
+- whether the gateway is a separate process or part of an existing process
 
-- source directory
-- package naming
-- Go package naming
-- generated output location
-- service definitions
-- gateway strategy
-- googleapis dependency strategy
-- generation commands
-- committed/generated artifact policy
-
-Do not silently replace the strategy with a different approach.
+Treat this document as authoritative.
 
 ---
 
-# 2. Read the Repository Layout
+# 2. Read the Protobuf Generation Review
 
 Read:
 
-docs/repository-layout.md
-
-Determine where protobuf source and generated code are supposed to live.
-
-Compare this against the actual repository.
-
-Do not reorganize directories simply to match personal preference.
-
----
-
-# 3. Read the Platform Audit
-
-Read:
-
-docs/platform-repository-audit.md
-
-Pay particular attention to:
-
-- existing `.proto` files
-- existing Makefiles
-- existing generation commands
-- tool versions
-- generated output
-- CI generation behavior
-- known protobuf findings
-
-Treat this as the starting point rather than repeating the entire repository audit.
-
----
-
-# 4. Establish Git State
-
-Run:
-
-git status --short
-
-Do not modify anything yet.
-
-Record relevant existing changes.
-
-Do not assume existing uncommitted changes belong to this agent.
-
----
-
-# 5. Locate Protobuf Sources
-
-Locate the active protobuf source files.
-
-Use the documented repository structure.
+docs/platform-protobuf-generation-review.md
 
 Identify:
 
-- service `.proto` files
-- shared `.proto` files
-- imported `.proto` files
-- package declarations
-- Go package options
-- HTTP annotations
-- external dependencies
+- generated gateway files
+- generated gRPC clients
+- generated package locations
+- gateway generation command
+- generator version
+- known generation limitations
+- deferred protobuf work
 
-Do not inspect unrelated protobuf files.
+Do not regenerate protobuf code unless a concrete gateway issue requires it.
 
 ---
 
-# 6. Identify Active Services
+# 3. Understand the Service Architecture
 
-Verify the protobuf definitions for the current services.
+Use:
+
+docs/domain-model.md
+
+and:
+
+docs/repository-layout.md
+
+to determine which services exist.
 
 At minimum account for:
 
 - Clients
 - Transactions
 
-Also identify any additional active service definitions documented by the repository.
+Do not assume that every internal gRPC method should automatically become a public HTTP endpoint.
 
-Do not invent new services.
-
----
-
-# 7. Verify Package Names
-
-For each active `.proto` file verify:
-
-- `package`
-- `option go_package`
-- service naming
-- message naming
-
-They must follow:
-
-docs/protobuf-strategy.md
-
-and:
-
-agents/project-context.md
-
-Do not rename protobuf packages merely for stylistic preference.
+Use the documented API exposure strategy.
 
 ---
 
-# 8. Verify Proto Imports
+# 4. Understand Existing Runtime Structure
 
-Inspect imports in active `.proto` files.
-
-Determine whether imports resolve from:
-
-- local protobuf source
-- googleapis
-- protobuf standard definitions
-- other documented dependencies
-
-Do not modify third-party protobuf definitions.
-
----
-
-# 9. Verify Google APIs Dependency
-
-Confirm:
-
-third_party/googleapis/
-
-exists if required by the documented protobuf strategy.
-
-Do not recursively inspect it.
-
-Verify only that the expected import root is available.
-
-For example, if the active proto imports:
-
-google/api/annotations.proto
-
-verify that the expected file exists.
-
-Do not inspect unrelated Google API files.
-
----
-
-# 10. Inspect Existing Generation Command
-
-Find the existing generation command.
-
-Likely locations include:
-
-- protobuf/Makefile
-- root Makefile
-- generation scripts
-- go generate directives
-
-Determine exactly what command currently generates the code.
-
-Do not replace a working command unnecessarily.
-
----
-
-# 11. Verify protoc
-
-Determine the required protoc version from the project documentation.
-
-Use:
-
-tools/versions.md
-
-if present.
-
-Verify the locally installed version if practical:
-
-protoc --version
-
-Do not upgrade it simply because a newer version exists.
-
----
-
-# 12. Verify protoc-gen-go
-
-Determine the project-required version.
-
-If practical:
-
-protoc-gen-go --version
-
-Verify that the binary is available.
-
-Do not blindly install another version.
-
----
-
-# 13. Verify protoc-gen-go-grpc
-
-Determine the project-required version.
-
-If practical:
-
-protoc-gen-go-grpc --version
-
-Verify that the binary is available.
-
-Do not invent a version.
-
----
-
-# 14. Verify protoc-gen-grpc-gateway
-
-If gateway generation is part of the documented protobuf strategy:
-
-verify:
-
-protoc-gen-grpc-gateway
-
-and its configured version.
-
-Do not implement gateway runtime behavior here.
-
----
-
-# 15. Version Consistency
-
-Compare versions across:
-
-- tools/versions.md
-- go.mod
-- Makefile
-- CI workflow
-- generated-code headers
-
-Look for mismatches.
-
-Example:
-
-Generated code says:
-
-protoc-gen-go v1.36.11
-
-while tools/versions.md says:
-
-v1.36.10
-
-This is a generation drift issue.
-
-Determine which version the project documentation explicitly requires.
-
-Do not choose arbitrarily.
-
----
-
-# 16. Generated Code Headers
-
-Inspect generated files only enough to determine:
-
-- generator versions
-- source proto
-- generated package
-
-Do not manually edit generated files.
-
-Generated headers are evidence, not configuration.
-
----
-
-# 17. Generation Output Paths
-
-Verify that generation writes files to the documented locations.
-
-For example:
-
-grpc/go/...
-
-or whatever:
-
-docs/repository-layout.md
-
-and:
-
-docs/protobuf-strategy.md
-
-specify.
-
-Do not create a second competing generated-code tree.
-
----
-
-# 18. source_relative Policy
-
-If the project uses:
-
-paths=source_relative
-
-verify that:
-
-- `--go_opt=paths=source_relative`
-- `--go-grpc_opt=paths=source_relative`
-
-are applied consistently.
-
-Do not introduce a different path strategy without explicit documentation.
-
----
-
-# 19. Go Package Layout
-
-Verify that generated files compile under their intended Go package.
-
-Pay attention to:
-
-- directory location
-- `go_package`
-- package declarations
-- imports
-
-The generated Go package should align with the documented repository structure.
-
----
-
-# 20. Gateway Generation
-
-If grpc-gateway generation is required:
-
-verify the command includes the appropriate gateway plugin.
-
-Do not implement:
-
-- HTTP handlers
-- HTTP server startup
-- gateway routing policy
-
-Those belong to Agent 03.
-
----
-
-# 21. gRPC Generation
-
-Verify that service stubs are generated using:
-
-protoc-gen-go-grpc
-
-and that generated interfaces correspond to the `.proto` service definitions.
-
-Do not modify generated interfaces manually.
-
----
-
-# 22. Protobuf Runtime Compatibility
-
-Verify that generated code uses dependency versions compatible with:
-
-go.mod
-
-Do not upgrade protobuf libraries.
-
-Do not modify dependency versions unless a concrete compatibility failure requires it.
-
-If a dependency mismatch exists:
-
-document it.
-
----
-
-# 23. Generation Command Reproducibility
-
-The generation process must be reproducible.
-
-A fresh developer should be able to determine:
-
-1. which tools are required
-2. which versions are required
-3. where protobuf sources live
-4. which command generates them
-5. where output is written
-
-Do not rely on undocumented local state.
-
----
-
-# 24. Local Generation
-
-Run the project's documented protobuf generation command.
-
-Use the existing project command where possible.
-
-Do not invent an alternative command merely because it is shorter.
-
----
-
-# 25. Inspect Generation Result
-
-After generation inspect:
-
-git status --short
-
-and:
-
-git diff --stat
-
-Determine:
-
-- which generated files changed
-- whether changes are expected
-- whether unrelated files changed
-
-Do not accept unrelated generated output.
-
----
-
-# 26. Generated Code Must Be Deterministic
-
-Run the generation command again.
-
-Then inspect:
-
-git status --short
-
-The second generation should not introduce additional differences.
-
-If repeated generation produces differences:
-
-investigate.
-
-This is a generation reproducibility problem.
-
----
-
-# 27. Do Not Manually Patch Generated Code
-
-If generated output is wrong:
-
-fix the source or generation configuration.
-
-Never manually edit:
-
-- `.pb.go`
-- `_grpc.pb.go`
-- generated gateway `.go`
-
-unless the repository explicitly treats that file as non-generated.
-
----
-
-# 28. Verify Generated Code Compilation
-
-Run the narrowest useful Go test/build command.
-
-For example:
-
-go test ./grpc/go/...
-
-if that path is valid.
-
-If the repository structure differs:
-
-use the documented equivalent.
-
-Do not run expensive unrelated tests unless necessary.
-
----
-
-# 29. Verify Service Compilation
-
-Verify that active services importing generated protobuf code still compile.
-
-At minimum:
-
-- Clients
-- Transactions
-
-Use targeted package tests/builds first.
-
-Do not run unrelated integration tests unless required.
-
----
-
-# 30. Verify Protobuf Contract Compatibility
-
-Do not redesign contracts.
-
-Instead verify that generated code corresponds exactly to source definitions.
-
-Check:
-
-- RPC names
-- request messages
-- response messages
-- package names
-- service names
-
----
-
-# 31. Verify HTTP Annotations
-
-If the protobuf strategy uses grpc-gateway annotations:
-
-verify:
-
-google.api.http
-
-annotations are syntactically correct.
-
-Do not implement HTTP routing outside protobuf annotations.
-
-Do not redesign HTTP endpoints.
-
----
-
-# 32. Verify Streaming Definitions
-
-If any service uses streaming RPCs:
-
-verify that generated code supports the declared streaming mode.
-
-Do not add streaming where none is documented.
-
----
-
-# 33. Verify Shared Messages
-
-Identify shared protobuf messages.
-
-Ensure they are not duplicated unnecessarily across active services.
-
-Do not consolidate messages unless the protobuf strategy explicitly requires it.
-
----
-
-# 34. Verify Naming Consistency
-
-Check:
-
-- PascalCase messages
-- RPC naming
-- field naming
-- package naming
-- Go package naming
-
-Follow existing project conventions.
-
-Do not rename working APIs merely for stylistic reasons.
-
----
-
-# 35. Verify Generated Artifact Policy
-
-Determine whether generated output is expected to be committed.
-
-Use:
+Read:
 
 README.md
 
 and:
 
-docs/protobuf-strategy.md
+agents/project-context.md
 
-Do not assume.
+to determine:
 
-If generated files are expected to be committed:
+- how services currently start
+- how configuration is loaded
+- how logging is initialized
+- how errors are handled
+- how servers are wired
+- package naming conventions
+- command naming conventions
 
-ensure they are present.
-
-If they are intentionally ignored:
-
-do not force them into git.
-
----
-
-# 36. Makefile Integration
-
-Inspect the existing protobuf Makefile.
-
-Ensure there is one clear generation entrypoint.
-
-If the project convention is:
-
-make generate-protos
-
-preserve it.
-
-Do not create multiple overlapping targets.
+Do not introduce a completely different application lifecycle.
 
 ---
 
-# 37. Root Makefile Integration
+# 5. Inspect Existing Gateway State
 
-If the root Makefile invokes protobuf generation:
+Locate only the relevant gateway files.
 
-verify that it calls the canonical protobuf generation target.
+Look for:
 
-Do not duplicate the generation implementation.
+- grpc-gateway packages
+- gateway commands
+- generated gateway files
+- `Register...Handler`
+- `Register...HandlerFromEndpoint`
+- `runtime.ServeMux`
+- `grpc.Dial`
+- HTTP server setup
 
----
-
-# 38. go generate Integration
-
-If:
-
-go generate ./...
-
-is part of the repository workflow:
-
-verify that protobuf generation does not conflict with it.
-
-Do not make `go generate` and Makefile generation produce different outputs.
+Do not search the entire repository recursively.
 
 ---
 
-# 39. CI Compatibility Preparation
+# 6. Determine Gateway Deployment Model
 
-This agent should ensure the generation command can be executed in a clean environment.
+Determine from the documentation whether the gateway is intended to be:
 
-Do not redesign CI.
+1. a separate HTTP process,
+2. embedded alongside the gRPC server,
+3. or another explicitly documented arrangement.
 
-Agent 05 will handle the CI/CD workflow.
+Do NOT choose a new architecture based on personal preference.
 
-If CI currently has a concrete protobuf generation defect:
-
-document it in:
-
-docs/platform-protobuf-generation-review.md
-
-and identify it for Agent 05.
-
----
-
-# 40. Tool Installation Documentation
-
-Ensure the required toolchain can be understood by a developer.
-
-The project should make clear:
-
-- protoc version
-- protoc-gen-go version
-- protoc-gen-go-grpc version
-- grpc-gateway generator version if used
-
-Prefer existing:
-
-tools/versions.md
-
-rather than introducing another version file.
-
----
-
-# 41. Avoid Duplicate Version Sources
-
-Do not create:
-
-protobuf-versions.md
-
-if:
-
-tools/versions.md
-
-already serves this purpose.
-
-There should be one authoritative version source.
-
-If multiple sources currently exist:
+If documentation conflicts:
 
 document the conflict.
 
----
-
-# 42. Dependency Submodule
-
-If googleapis is a git submodule:
-
-verify:
-
-git submodule status
-
-Do not update the submodule.
-
-Do not change its commit.
-
-Do not modify its contents.
+Do not silently redesign the platform.
 
 ---
 
-# 43. Fresh Checkout Simulation
+# 7. Gateway Must Not Contain Business Logic
 
-If practical, verify the generation workflow using the repository's documented setup.
+The gateway must perform:
 
-Do not delete local tooling.
+HTTP
+→ generated gateway handler
+→ gRPC client
+→ gRPC service
+→ repository/domain logic
 
-Do not modify global developer configuration.
+It must NOT perform:
 
-The goal is to determine whether the documented workflow is reproducible.
+HTTP
+→ database
 
----
+or:
 
-# 44. Clean Generation Check
+HTTP
+→ business logic
 
-Where practical:
+or:
 
-1. generate protobuf code
-2. inspect diff
-3. generate again
-4. confirm no new diff
+HTTP
+→ direct provider API
 
-Do not blindly delete generated files if they are tracked.
-
----
-
-# 45. Detect Stale Generated Code
-
-If generated code differs from the committed source:
-
-determine whether:
-
-- source proto changed
-- generator version changed
-- protoc version changed
-- generation flags changed
-- output path changed
-
-Do not simply regenerate and commit without understanding why.
+unless explicitly required by the documented architecture.
 
 ---
 
-# 46. Handle Version Drift Carefully
+# 8. Use Generated Gateway Code
 
-If the generated code indicates a newer generator than the project's documented version:
+Use the generated grpc-gateway code produced by Agent 02.
 
-do NOT immediately update the documented version.
+Do not manually recreate generated handlers.
+
+For example, if generated code provides:
+
+RegisterClientsHandler
+
+or:
+
+RegisterClientsHandlerFromEndpoint
+
+use those functions.
+
+Do not duplicate their functionality.
+
+---
+
+# 9. Verify Gateway Registration
+
+For each HTTP-exposed service:
+
+verify the generated registration function exists.
+
+Examples may resemble:
+
+RegisterClientsHandlerFromEndpoint
+
+RegisterTransactionsHandlerFromEndpoint
+
+Use the actual generated names.
+
+Do not invent names.
+
+---
+
+# 10. Gateway Multiplexing
+
+If multiple services share the gateway:
+
+use a single gateway multiplexer where the documented architecture calls for one.
+
+The expected flow should resemble:
+
+HTTP request
+    ↓
+runtime.ServeMux
+    ↓
+generated handler
+    ↓
+gRPC service
+
+Do not create a separate mux for every RPC unless explicitly required.
+
+---
+
+# 11. Gateway-to-gRPC Connection
+
+Configure the gateway to communicate with the appropriate gRPC service.
 
 Determine:
 
-1. what version generated the committed file
-2. what version local tooling uses
-3. what version CI uses
-4. what version the project documentation specifies
+- host
+- port
+- protocol
+- connection lifecycle
+- local development defaults
 
-Then document the mismatch.
+Do not hard-code production infrastructure addresses.
 
----
-
-# 47. Correcting Generation Drift
-
-A correction may be made only when the intended version is unambiguous.
-
-For example:
-
-If:
-
-tools/versions.md
-
-explicitly defines:
-
-protoc-gen-go vX
-
-and generation currently uses vY due to an incorrect local configuration,
-
-correct the generation process to use vX.
-
-Do not update project versions merely to match a local installation.
+Use configuration.
 
 ---
 
-# 48. Do Not Upgrade Protobuf Dependencies
+# 12. Configuration
 
-Do not perform broad upgrades such as:
-
-go get -u
-
-or:
-
-go get google.golang.org/protobuf@latest
-
-or:
-
-go get google.golang.org/grpc@latest
-
-unless an explicit documented requirement requires it.
-
----
-
-# 49. Do Not Modify Business Services
-
-Do not change:
-
-clients/
-
-transactions/
-
-business logic merely because generated code exposes something you would implement differently.
-
-Only make minimal import/package corrections if directly required to compile after correcting protobuf generation.
-
----
-
-# 50. Do Not Implement HTTP Gateway
-
-Even if the protobuf annotations suggest gateway work:
-
-do not implement:
-
-- HTTP server
-- ServeMux
-- gateway runtime
-- gateway startup
-- HTTP middleware
-
-Agent 03 owns that.
-
----
-
-# 51. Do Not Implement Observability
-
-Do not add:
-
-- metrics
-- tracing
-- health checks
-- OpenTelemetry
-
-Agent 09 owns observability.
-
----
-
-# 52. Do Not Modify CI
-
-Do not edit:
-
-.github/workflows/
-
-unless a tiny, directly necessary generation correction is unavoidable.
-
-Prefer documenting CI changes for:
-
-Agent 05.
-
----
-
-# 53. Review Existing Findings
+Gateway configuration must follow the existing project configuration conventions.
 
 Read:
 
-docs/platform-repository-audit.md
+agents/project-context.md
 
-Identify all protobuf-related findings.
+before adding configuration.
 
-For every relevant finding:
+Do not create a second configuration framework.
 
-- resolve it if this agent owns it
-- otherwise document why it is being passed to a later agent
+Do not introduce unrelated environment variables.
+
+Document every gateway-specific variable.
 
 ---
 
-# 54. Create Review Document
+# 13. Local Development Defaults
 
-Create:
+If the existing architecture supports local development:
 
-docs/platform-protobuf-generation-review.md
+provide sensible local defaults.
 
-Use exactly this structure:
+For example:
 
-# Platform Protobuf Generation Review
+localhost:<grpc-port>
 
-## 1. Objective
+Only use actual ports defined by the project.
 
-Explain the generation work performed.
+Do not invent production ports.
 
-## 2. Required Documentation
+---
 
-List every required document and whether it was read.
+# 14. Production Configuration
 
-## 3. Existing Protobuf Structure
+The gateway must not assume:
 
-Describe the source and generated-code structure.
+localhost
 
-## 4. Toolchain
+for production service communication.
+
+Use environment-backed configuration where required.
+
+Do not hard-code Render hostnames.
+
+---
+
+# 15. HTTP Listen Address
+
+Configure the HTTP gateway's listen address according to the deployment architecture.
+
+For containerized deployment:
+
+the gateway generally needs to bind to an externally reachable interface rather than only loopback.
+
+Use the project's documented conventions.
+
+Do not change unrelated service binding behavior.
+
+---
+
+# 16. HTTP Port
+
+The gateway's HTTP port must come from configuration where the architecture requires it.
+
+Do not hard-code a platform-specific port.
+
+If the deployment platform expects a `PORT` environment variable:
+
+document that dependency.
+
+Do not modify Render configuration in this agent.
+
+---
+
+# 17. gRPC Port
+
+The gateway's gRPC upstream address must be configurable.
+
+Do not assume:
+
+localhost:50051
+
+unless that is actually the project's documented value.
+
+---
+
+# 18. Context and Shutdown
+
+The gateway server must support graceful shutdown.
+
+Use the project's existing context/signal conventions where available.
+
+The gateway should respond to:
+
+- SIGINT
+- SIGTERM
+
+without abruptly terminating active requests when graceful shutdown is possible.
+
+Do not redesign the entire application lifecycle.
+
+---
+
+# 19. HTTP Server
+
+Use Go's standard HTTP server infrastructure unless the project explicitly specifies another framework.
+
+Avoid unnecessary dependencies.
+
+The gateway should expose:
+
+- the grpc-gateway mux
+- documented middleware
+- the configured HTTP listener
+
+Do not add business handlers manually.
+
+---
+
+# 20. Gateway Middleware
+
+Only add middleware explicitly required by the documented architecture.
+
+Potential concerns include:
+
+- request logging
+- CORS
+- request IDs
+- authentication
+
+However:
+
+DO NOT implement the complete observability or security architecture here.
+
+Agent 09 handles observability.
+
+Agent 10 handles security.
+
+Only establish the minimum gateway structure necessary for those later components.
+
+---
+
+# 21. CORS
+
+Determine from the documentation whether CORS is required.
+
+If it is required:
+
+implement it according to the documented API requirements.
+
+Do not use:
+
+Allow-Origin: *
+
+for production merely because it is convenient.
+
+If the allowed-origin policy is not yet defined:
+
+document it for Agent 10 rather than inventing a security policy.
+
+---
+
+# 22. Authentication
+
+Do not implement authentication middleware unless explicitly defined by the architecture.
+
+The gateway may need to preserve authorization metadata for downstream gRPC services.
+
+If this requirement exists:
+
+implement only the documented transport mechanism.
+
+Do not invent JWT/session/OAuth validation here.
+
+---
+
+# 23. OAuth Routes
+
+Do NOT implement HighLevel OAuth flows in this agent.
+
+OAuth belongs to the Clients service.
+
+This agent may expose the Clients OAuth endpoints only if:
+
+- the endpoints are represented by the documented HTTP API,
+- the Clients service owns the actual implementation,
+- and the gateway only forwards the request.
+
+The gateway must not:
+
+- exchange OAuth codes
+- decrypt OAuth tokens
+- store OAuth credentials
+- call HighLevel directly
+
+---
+
+# 24. Webhook Routes
+
+Do NOT implement webhook business processing here.
+
+If webhook endpoints are exposed through grpc-gateway:
+
+the gateway should simply route them to the appropriate gRPC service.
+
+Do not:
+
+- validate provider signatures here unless explicitly defined as gateway responsibility
+- update database records
+- process events
+- call external providers
+
+Those belong to the service layer.
+
+---
+
+# 25. HTTP Error Translation
+
+Use grpc-gateway's standard error translation unless the architecture specifies custom behavior.
+
+Do not invent a second error format.
+
+If custom error mapping is required:
+
+implement it centrally.
+
+Do not duplicate error conversion in every service.
+
+---
+
+# 26. HTTP Status Codes
+
+Verify that HTTP status codes originate from the documented protobuf/API contract.
+
+Do not manually force every RPC to return:
+
+200 OK
+
+when the HTTP semantics require another status.
+
+---
+
+# 27. JSON Serialization
+
+Use the generated gateway behavior and protobuf JSON conventions.
+
+Do not create separate JSON DTOs unless explicitly required.
+
+Avoid duplicate representations of protobuf messages.
+
+---
+
+# 28. Content Types
+
+Ensure the gateway correctly handles:
+
+- application/json
+- protobuf-generated request/response serialization
+
+according to grpc-gateway defaults and documented requirements.
+
+Do not introduce custom serialization without a concrete requirement.
+
+---
+
+# 29. HTTP Path Parameters
+
+Verify that path parameters map correctly to protobuf request fields.
+
+For example:
+
+/clients/{client_id}
+
+must map to the documented protobuf field.
+
+Do not add routes not defined by the protobuf contract.
+
+---
+
+# 30. Query Parameters
+
+Verify that query parameters are mapped through the generated gateway layer.
+
+Do not manually parse query parameters in business handlers.
+
+---
+
+# 31. Request Bodies
+
+Verify that HTTP request bodies map to the correct protobuf request messages.
+
+Do not create parallel request structs solely for HTTP.
+
+---
+
+# 32. Service Registration
+
+Register all HTTP-exposed services required by the architecture.
+
+At minimum inspect:
+
+- Clients
+- Transactions
+
+Do not register internal-only services unless documented.
+
+---
+
+# 33. gRPC Endpoint Discovery
+
+Use the documented configuration mechanism for locating gRPC services.
+
+Do not introduce service discovery infrastructure in this agent.
+
+If service discovery is planned but not yet implemented:
+
+document the required integration.
+
+---
+
+# 34. Connection Lifecycle
+
+Ensure gateway gRPC connections remain available for the lifetime of the gateway.
+
+Do not create a new gRPC connection per HTTP request.
+
+---
+
+# 35. Connection Shutdown
+
+Ensure gateway connections are closed during shutdown where the connection API requires explicit cleanup.
+
+Avoid resource leaks.
+
+---
+
+# 36. TLS
+
+Do not invent TLS architecture.
+
+If TLS termination is expected to happen at:
+
+- reverse proxy
+- Render
+- load balancer
+- ingress
+
+follow the documented architecture.
+
+If the gateway itself must use TLS:
+
+implement only if explicitly specified.
+
+---
+
+# 37. Health Endpoint
+
+Do not invent health endpoints here unless the platform documentation specifies them.
+
+If a health endpoint is required:
+
+document the requirement for the appropriate platform/observability agent if it falls outside the gateway's scope.
+
+---
+
+# 38. Readiness
+
+Do not add a custom readiness system.
+
+The gateway should at minimum fail appropriately if its upstream gRPC service cannot be established when the architecture requires startup-time connection validation.
+
+Do not introduce service discovery or health orchestration.
+
+---
+
+# 39. Gateway Logging
+
+Follow the existing logging convention.
+
+Read:
+
+agents/project-context.md
+
+Do not introduce:
+
+- fmt.Println
+- log.Printf
+
+if the project uses structured logging.
+
+Use the project's established logger.
+
+---
+
+# 40. Gateway Errors
+
+Errors during startup should be:
+
+- logged
+- returned
+- associated with the correct failure context
+
+Do not swallow startup failures.
+
+Do not use panic for ordinary configuration or connection errors.
+
+---
+
+# 41. Graceful Shutdown
+
+The gateway should:
+
+1. receive shutdown signal
+2. stop accepting new requests
+3. allow active requests to complete where possible
+4. close upstream connections
+5. exit cleanly
+
+Follow existing project lifecycle patterns.
+
+---
+
+# 42. Testing
+
+Write targeted gateway tests where appropriate.
+
+Test at minimum:
+
+- gateway initialization
+- route registration
+- configuration handling
+- shutdown behavior if practical
+- HTTP-to-gRPC forwarding where practical
+
+Do not create a huge integration-test framework.
+
+---
+
+# 43. Do Not Test Generated Code Internals
+
+Do not write tests for grpc-gateway generated implementation details.
+
+Test the application's gateway wiring.
+
+---
+
+# 44. Gateway Integration Test
+
+If practical:
+
+create a small in-process test setup where:
+
+HTTP request
+→ gateway
+→ test gRPC server
+
+can be verified.
+
+Do not require external Render infrastructure.
+
+---
+
+# 45. Test HTTP Routes
+
+Verify representative routes for the active services.
+
+At minimum consider:
+
+- one Clients route
+- one Transactions route
+
+Use actual routes defined by the protobuf contracts.
+
+Do not invent fake endpoints.
+
+---
+
+# 46. Test Error Propagation
+
+Verify that a representative gRPC error becomes the expected HTTP response through grpc-gateway.
+
+Do not duplicate grpc-gateway's implementation.
+
+---
+
+# 47. Test JSON Mapping
+
+Verify one representative request/response mapping.
+
+Ensure protobuf fields serialize as expected.
+
+---
+
+# 48. Build Verification
+
+Run the narrowest relevant Go build/test commands first.
+
+Do not immediately run the entire repository test suite.
+
+Start with the gateway package.
+
+Then test dependent service packages where appropriate.
+
+---
+
+# 49. Generated Code Verification
+
+Do not modify generated files manually.
+
+If generated code is missing:
+
+document the issue for Agent 02.
+
+If the gateway cannot compile because generation is stale:
+
+STOP and report the dependency rather than manually patching generated code.
+
+---
+
+# 50. Makefile
+
+If the repository already has gateway targets:
+
+use them.
+
+If a gateway target is missing and the architecture requires one:
+
+add a minimal target following existing Makefile conventions.
+
+Do not redesign the root Makefile.
+
+---
+
+# 51. Documentation
 
 Document:
 
-| Tool | Required Version | Actual Version | Status |
-|---|---|---|---|
-| protoc | | | |
-| protoc-gen-go | | | |
-| protoc-gen-go-grpc | | | |
-| protoc-gen-grpc-gateway | | | |
+- gateway command
+- required environment variables
+- HTTP port
+- gRPC upstream configuration
+- local startup
+- exposed service registration
+- shutdown behavior
 
-## 5. Generation Commands
+Do not create a second API specification.
 
-Document the canonical generation commands.
+The protobuf definitions remain the API source of truth.
 
-## 6. Source Protobuf Verification
+---
+
+# 52. README Changes
+
+Only modify README.md if the gateway implementation changes the documented developer workflow.
+
+Do not rewrite the entire README.
+
+Preserve existing structure and terminology.
+
+---
+
+# 53. Avoid Architecture Drift
+
+Do not introduce:
+
+- REST controllers
+- Gin
+- Echo
+- Fiber
+- custom HTTP routers
+- GraphQL
+- direct database HTTP handlers
+
+unless explicitly required by the existing architecture.
+
+The documented grpc-gateway approach must remain the default.
+
+---
+
+# 54. Avoid Duplicate API Layers
+
+There must not be both:
+
+HTTP handler → service
+
+and:
+
+grpc-gateway → gRPC service
+
+implementing the same API unless explicitly documented.
+
+The gateway should remain a transport adapter.
+
+---
+
+# 55. Service Boundary
+
+The architecture should remain:
+
+                    ┌───────────────┐
+HTTP ──────────────>│ HTTP Gateway  │
+                    └───────┬───────┘
+                            │
+                            │ gRPC
+                            ▼
+                 ┌─────────────────────┐
+                 │ gRPC Service        │
+                 │                     │
+                 │ Clients             │
+                 │ Transactions        │
+                 └──────────┬──────────┘
+                            │
+                            ▼
+                       Repositories
+
+The gateway must not bypass the service layer.
+
+---
+
+# 56. Multiple Service Registration
+
+If the gateway connects to multiple independently running services:
+
+follow the documented service topology.
+
+Do not merge service implementations into the gateway.
+
+The gateway is a transport layer only.
+
+---
+
+# 57. Separate Service Processes
+
+If Clients and Transactions are separate processes:
+
+do not assume they share the same gRPC server.
+
+Configure their upstream endpoints independently where required.
+
+Use configuration.
+
+---
+
+# 58. Embedded Gateway Case
+
+If the documented architecture explicitly embeds the gateway alongside a gRPC server:
+
+follow that architecture.
+
+Do not split it into separate processes merely for preference.
+
+---
+
+# 59. Configuration Validation
+
+Gateway startup should fail clearly when required configuration is missing.
+
+Do not allow empty upstream addresses to reach a connection attempt that produces an unclear error.
+
+Use the existing configuration validation conventions.
+
+---
+
+# 60. No Secrets in Source
+
+Do not commit:
+
+- OAuth client secrets
+- API keys
+- database passwords
+- tokens
+- Render deploy hooks
+
+The gateway should not contain provider credentials.
+
+---
+
+# 61. No Production URLs in Source
+
+Do not hard-code:
+
+- Render URLs
+- production hostnames
+- database hostnames
+- provider URLs
+
+Use configuration.
+
+---
+
+# 62. Security Boundary
+
+The gateway is an entry point.
+
+Do not weaken security for convenience.
+
+Do not add permissive CORS or unauthenticated production endpoints without documented justification.
+
+If the required security policy is not yet defined:
+
+document it for Agent 10.
+
+---
+
+# 63. Performance
+
+Do not prematurely optimize the gateway.
+
+At minimum:
+
+- reuse gRPC connections
+- avoid per-request connection creation
+- avoid unnecessary JSON transformations
+- avoid unnecessary allocations where obvious
+
+Do not implement caching here.
+
+Agent 11 handles performance.
+
+---
+
+# 64. Observability Boundary
+
+Do not implement full metrics/tracing.
+
+Ensure the gateway has enough structure that Agent 09 can later add:
+
+- request metrics
+- latency metrics
+- tracing
+- request IDs
+
+without rewriting the gateway.
+
+---
+
+# 65. Docker Compatibility
+
+Do not modify Dockerfiles.
+
+However, ensure the gateway command can run as a normal process in a container.
+
+If the current Docker architecture cannot support it:
+
+document the issue for Agent 06.
+
+---
+
+# 66. Render Compatibility
+
+Do not modify Render configuration.
+
+Ensure the gateway:
+
+- reads configuration from environment
+- binds to the configured interface
+- binds to the configured port
+- exits with non-zero status on startup failure
+
+Document any Render-specific requirement for Agent 07.
+
+---
+
+# 67. Do Not Touch Third-Party Dependencies
+
+Do not modify:
+
+third_party/googleapis/
+
+Do not update submodules.
+
+Do not vendor additional dependencies.
+
+---
+
+# 68. Review Existing Findings
+
+Review:
+
+docs/platform-repository-audit.md
+
+and:
+
+docs/platform-protobuf-generation-review.md
+
+For each gateway-related finding:
+
+- resolve it if this agent owns it
+- document it if it belongs to another agent
+- do not silently ignore it
+
+---
+
+# 69. Create Review Document
+
+Create:
+
+docs/platform-http-gateway-review.md
+
+Use exactly this structure:
+
+# Platform HTTP Gateway Review
+
+## 1. Objective
+
+Describe the gateway implementation.
+
+## 2. Required Documentation
+
+List each required document and whether it was read.
+
+## 3. Gateway Architecture
 
 Describe:
 
-- package names
-- go_package
-- imports
-- service definitions
-- annotations
+- HTTP entry point
+- gateway mux
+- gRPC upstream
+- service registration
 
-## 7. Generated Output
+## 4. Gateway Services
 
-Document output locations.
+| Service | HTTP Exposure | Registration | Status |
+|---|---|---|---|
+| Clients | | | |
+| Transactions | | | |
 
-## 8. Googleapis Dependency
+## 5. Configuration
 
-Document how googleapis is resolved.
+Document gateway configuration variables.
 
-Do not reproduce the contents of the submodule.
+## 6. HTTP Routes
 
-## 9. Reproducibility
+Document the source of truth for routes.
 
-Document repeated-generation results.
+Do not duplicate the entire protobuf specification.
 
-## 10. Compilation Verification
+## 7. Error Handling
 
-List commands and results.
+Describe grpc-gateway error handling.
 
-## 11. CI Compatibility
+## 8. Shutdown
 
-Document any CI concerns for Agent 05.
+Describe graceful shutdown behavior.
 
-## 12. Findings
+## 9. Testing
+
+Document tests performed and results.
+
+## 10. Findings
 
 Use:
 
 | ID | Severity | File/Area | Finding | Resolution |
 |---|---|---|---|---|
 
-## 13. Changes Made
+## 11. Deferred Work
+
+List issues belonging to:
+
+- Agent 05
+- Agent 06
+- Agent 07
+- Agent 09
+- Agent 10
+- Agent 11
+
+where applicable.
+
+## 12. Changes Made
 
 List only files actually modified.
 
-## 14. Deferred Work
-
-List issues belonging to other agents.
-
-## 15. Documentation Check
+## 13. Documentation Check
 
 Record the final documentation verification.
 
-## 16. Final Status
+## 14. Final Status
 
 Use exactly one:
 
@@ -1147,11 +1311,9 @@ BLOCKED
 
 ---
 
-# 55. Final Generation Verification
+# 70. Final Verification
 
-Run the canonical protobuf generation command one final time.
-
-Then:
+Run:
 
 git status --short
 
@@ -1159,35 +1321,47 @@ Then:
 
 git diff --stat
 
-Then inspect relevant generated diffs.
+Inspect all changed files.
 
-Confirm:
-
-- no unexpected generated files
-- no unrelated source changes
-- no stale output
-- no repeated-generation drift
+Ensure no unrelated changes were introduced.
 
 ---
 
-# 56. Final Compilation Verification
+# 71. Final Gateway Generation Check
 
-Run the narrowest relevant checks.
+Do not regenerate protobuf artifacts unless required.
 
-At minimum verify that generated protobuf packages compile.
+If generation is required:
 
-Where practical verify:
+use the canonical command documented by Agent 02.
 
-- Clients
-- Transactions
+After generation:
 
-still compile against the generated output.
+verify that generated output is clean.
+
+Do not manually modify generated files.
 
 ---
 
-# 57. Final Documentation Check
+# 72. Final Build/Test
 
-Confirm the following were read:
+Run the narrowest relevant checks first.
+
+Then, if practical:
+
+go test ./...
+
+Do not spend excessive time running unrelated tests if targeted tests already establish correctness.
+
+If a repository-wide failure is unrelated:
+
+document it.
+
+---
+
+# 73. Final Documentation Check
+
+Confirm all required documents were read:
 
 - README.md
 - agents/project-context.md
@@ -1196,32 +1370,36 @@ Confirm the following were read:
 - docs/protobuf-strategy.md
 - docs/migration-plan.md
 - docs/platform-repository-audit.md
+- docs/platform-protobuf-generation-review.md
 
-Record this in:
+Record the result in:
 
-docs/platform-protobuf-generation-review.md
+docs/platform-http-gateway-review.md
 
 ---
 
-# 58. Final Scope Check
+# 74. Final Scope Check
 
 Run:
 
 git status --short
 
-Verify that modifications are limited to protobuf-generation-related files and:
+Verify that changes are limited to:
 
-docs/platform-protobuf-generation-review.md
+- gateway implementation
+- gateway configuration where required
+- gateway tests
+- minimal Makefile changes if required
+- minimal README documentation if required
+- docs/platform-http-gateway-review.md
 
-If unrelated changes are present:
+Do not revert unrelated pre-existing changes automatically.
 
-DO NOT revert them automatically.
-
-Document them.
+Document them if present.
 
 ---
 
-# 59. Final Completion Checklist
+# 75. Final Completion Checklist
 
 Before stopping:
 
@@ -1232,32 +1410,33 @@ Before stopping:
 - [ ] docs/protobuf-strategy.md was read.
 - [ ] docs/migration-plan.md was read.
 - [ ] docs/platform-repository-audit.md was read.
-- [ ] Protobuf source files were identified.
-- [ ] Active protobuf services were identified.
-- [ ] Package names were verified.
-- [ ] go_package values were verified.
-- [ ] Imports were verified.
-- [ ] googleapis dependency was verified.
-- [ ] googleapis was NOT recursively inspected.
-- [ ] protoc version was verified.
-- [ ] protoc-gen-go version was verified.
-- [ ] protoc-gen-go-grpc version was verified.
-- [ ] grpc-gateway generator version was verified where applicable.
-- [ ] Generation commands were verified.
-- [ ] Output paths were verified.
-- [ ] Generated code was regenerated.
-- [ ] Repeated generation was checked for determinism.
-- [ ] Generated code was not manually edited.
-- [ ] Generated packages compile.
-- [ ] Relevant service packages compile.
-- [ ] Version drift was investigated.
-- [ ] No unnecessary dependency upgrades were performed.
-- [ ] No business-service redesign was performed.
-- [ ] No HTTP gateway implementation was performed.
+- [ ] docs/platform-protobuf-generation-review.md was read.
+- [ ] Existing gateway state was inspected.
+- [ ] Gateway architecture was confirmed from documentation.
+- [ ] Generated gateway code was identified.
+- [ ] HTTP-exposed services were identified.
+- [ ] Gateway registration was verified.
+- [ ] Gateway configuration was implemented consistently.
+- [ ] gRPC upstream connections are reusable.
+- [ ] HTTP server lifecycle is correct.
+- [ ] Graceful shutdown is implemented.
+- [ ] No business logic was added to the gateway.
+- [ ] No direct database access was added.
+- [ ] No direct provider API calls were added.
+- [ ] OAuth business logic was not added.
+- [ ] Webhook business logic was not added.
+- [ ] Generated files were not manually edited.
+- [ ] Third-party googleapis files were not modified.
+- [ ] Gateway tests were added where appropriate.
+- [ ] Gateway compilation succeeded.
+- [ ] Relevant service compilation succeeded.
+- [ ] HTTP-to-gRPC behavior was verified where practical.
 - [ ] No CI redesign was performed.
-- [ ] docs/platform-protobuf-generation-review.md was created.
-- [ ] Final git state was checked.
+- [ ] No Docker changes were performed.
+- [ ] No Render changes were performed.
+- [ ] docs/platform-http-gateway-review.md was created.
 - [ ] Final documentation check was recorded.
+- [ ] Final git state was inspected.
 
 ---
 
@@ -1265,29 +1444,33 @@ Before stopping:
 
 STOP after:
 
-1. verifying the protobuf architecture,
-2. correcting only protobuf-generation issues owned by this agent,
-3. successfully generating the protobuf artifacts,
-4. verifying repeated generation is deterministic,
-5. verifying generated code compiles,
-6. documenting any CI follow-up,
-7. creating docs/platform-protobuf-generation-review.md,
-8. completing the documentation check,
-9. checking final git status.
+1. reading all required documentation,
+2. confirming the gateway architecture,
+3. implementing only the documented HTTP gateway layer,
+4. registering the required generated gateway handlers,
+5. verifying HTTP-to-gRPC routing,
+6. verifying configuration,
+7. verifying graceful shutdown,
+8. adding focused gateway tests,
+9. creating docs/platform-http-gateway-review.md,
+10. completing the documentation check,
+11. checking final git status.
 
 Do NOT proceed to:
 
-- HTTP gateway implementation
-- CI/CD redesign
+- common packages
+- CI/CD
 - Docker
 - Render
-- observability
-- security remediation
+- observability implementation
+- security implementation
 - performance optimization
+- database changes
+- repository changes
 - Clients business logic
 - Transactions business logic
-- database redesign
-- provider integrations
+- OAuth implementation
+- webhook processing
 
 Those belong to later agents.
 

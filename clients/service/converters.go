@@ -35,14 +35,14 @@ func sqlcPlatformToProto(p sqlc.Platform) *clientsgrpc.Platform {
 		platformStatus = commongrpc.PlatformStatus_PLATFORM_STATUS_ACTIVE
 	}
 	return &clientsgrpc.Platform{
-		Id:          p.ID.String(),
-		Name:        p.Name,
-		DisplayName: p.DisplayName,
-		Slug:        p.Slug,
-		Status:      platformStatus,
+		Id:           p.ID.String(),
+		Name:         p.Name,
+		DisplayName:  p.DisplayName,
+		Slug:         p.Slug,
+		Status:       platformStatus,
 		Capabilities: capabilities,
-		CreatedAt:   timestamppb.New(p.CreatedAt),
-		UpdatedAt:   timestamppb.New(p.UpdatedAt),
+		CreatedAt:    timestamppb.New(p.CreatedAt),
+		UpdatedAt:    timestamppb.New(p.UpdatedAt),
 	}
 }
 

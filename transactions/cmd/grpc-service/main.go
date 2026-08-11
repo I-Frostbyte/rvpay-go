@@ -6,23 +6,24 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpc"
+	commondatabase "github.com/I-Frostbyte/rvpay-go/shared/database"
+	commonlogger "github.com/I-Frostbyte/rvpay-go/shared/logger"
+	commonobservability "github.com/I-Frostbyte/rvpay-go/shared/observability"
 	"github.com/I-Frostbyte/rvpay-go/transactions/config"
 	"github.com/I-Frostbyte/rvpay-go/transactions/customers"
 	"github.com/I-Frostbyte/rvpay-go/transactions/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/transactions/deposits"
 	"github.com/I-Frostbyte/rvpay-go/transactions/merchants"
 	"github.com/I-Frostbyte/rvpay-go/transactions/payouts"
-	"github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpc"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -34,9 +35,13 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	logger := zerolog.New(os.Stderr).With().Timestamp().Caller().Logger()
+	logger, err := commonlogger.New("", os.Stderr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
+		os.Exit(1)
+	}
 
-	err := run(ctx, logger)
+	err = run(ctx, logger)
 	if err != nil {
 		logger.Err(err).Msg("failed to run grpc service")
 		os.Exit(1)
@@ -56,22 +61,15 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 
 	logger.Info().Msg("successfully loaded configuration")
 
-	logLevel, err := zerolog.ParseLevel(config.LogLevel)
+	logger, err = commonlogger.New(config.LogLevel, os.Stderr)
 	if err != nil {
 		return fmt.Errorf("failed to parse log level: %w", err)
 	}
-	logger = logger.Level(logLevel)
 
 	dbConnectionURL := getPostgresConnectionURL(config.DB)
-	db, err := pgxpool.New(ctx, dbConnectionURL)
+	db, err := commondatabase.Connect(ctx, dbConnectionURL)
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	// FORCE AN EAGER CONNECTION TO DETECT INVALID PORT IN URL IMMEDIATELY
-	err = db.Ping(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to actually connect to database: %w", err)
+		return err
 	}
 
 	// This line will now only print if the URL syntax and network route are 100% correct
@@ -80,7 +78,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	defer db.Close()
 
 	if config.RunMigrations {
-		err = repo.Migrate(dbConnectionURL, config.MigrationPath, logger)
+		err = commondatabase.Migrate(dbConnectionURL, config.MigrationPath, logger)
 		if err != nil {
 			logger.Err(err).Msg("Migration not successful...")
 			return fmt.Errorf("failed to migrate: %w", err)
@@ -107,6 +105,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	svrOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
 			grpc_recovery.UnaryServerInterceptor(),
+			commonobservability.UnaryServerInterceptor(logger),
 		),
 	}
 
@@ -145,7 +144,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	defer cancel()
 
 	httpMux := http.NewServeMux()
-	httpMux.Handle("/", gatewayMux)
+	httpMux.Handle("/", commonobservability.AccessLog(logger)(gatewayMux))
 	httpMux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -236,20 +235,5 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 }
 
 func getPostgresConnectionURL(config model.DBConfig) string {
-	queryValues := url.Values{}
-	if config.TLSDisabled {
-		queryValues.Add("sslmode", "disable")
-	} else {
-		queryValues.Add("sslmode", "require")
-	}
-
-	dbURL := url.URL{
-		Scheme:   "postgres",
-		User:     url.UserPassword(config.DBUser, config.DBPassword),
-		Host:     fmt.Sprintf("%s:%d", config.DBHost, config.DBPort),
-		Path:     config.DBName,
-		RawQuery: queryValues.Encode(),
-	}
-
-	return dbURL.String()
+	return commondatabase.PostgresURL(config.DBUser, config.DBPassword, int(config.DBPort), config.DBHost, config.DBName, config.TLSDisabled)
 }

@@ -3,26 +3,26 @@ package payouts
 import (
 	"strconv"
 
-	"github.com/I-Frostbyte/rvpay-go/transactions/db/sqlc"
 	commongrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/commongrpc"
 	transactionsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpc"
+	"github.com/I-Frostbyte/rvpay-go/transactions/db/sqlc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // payoutToProto maps a persisted payout to its protobuf representation.
 func payoutToProto(payout sqlc.Payout) *transactionsgrpc.Payout {
 	proto := &transactionsgrpc.Payout{
-		Id:                  payout.ID.String(),
-		ClientId:            payout.ClientID.String(),
-		MerchantId:          payout.MerchantID.String(),
-		Amount:              &commongrpc.Money{},
-		Provider:            sqlcPaymentProviderToGrpc(payout.Provider),
+		Id:                   payout.ID.String(),
+		ClientId:             payout.ClientID.String(),
+		MerchantId:           payout.MerchantID.String(),
+		Amount:               &commongrpc.Money{},
+		Provider:             sqlcPaymentProviderToGrpc(payout.Provider),
 		DestinationReference: payout.DestinationReference,
-		Status:              sqlcPayoutStatusToGrpc(payout.Status),
-		ExternalReference:   payout.ExternalReference,
-		RequestedAt:         timestamppb.New(payout.RequestedAt),
-		CreatedAt:           timestamppb.New(payout.CreatedAt),
-		UpdatedAt:           timestamppb.New(payout.UpdatedAt),
+		Status:               sqlcPayoutStatusToGrpc(payout.Status),
+		ExternalReference:    payout.ExternalReference,
+		RequestedAt:          timestamppb.New(payout.RequestedAt),
+		CreatedAt:            timestamppb.New(payout.CreatedAt),
+		UpdatedAt:            timestamppb.New(payout.UpdatedAt),
 	}
 
 	// Amount is stored as NUMERIC(18,2); expose it as a decimal string.

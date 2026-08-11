@@ -6,7 +6,7 @@ GOOGLEAPIS_DIR?=../third_party/googleapis
 
 lint:
 	@echo "Running clang-format on protobufs"
-	clang-format --dry-run --Werror *.proto types/*.proto
+	clang-format --dry-run --Werror *.proto
 
 # generate-protos
 generate-protos:

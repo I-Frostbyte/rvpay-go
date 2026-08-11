@@ -11,6 +11,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const countMerchants = `-- name: CountMerchants :one
+SELECT COUNT(*) FROM merchants
+`
+
+func (q *Queries) CountMerchants(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countMerchants)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createMerchant = `-- name: CreateMerchant :one
 INSERT INTO merchants (name, slug, status)
 VALUES ($1, $2, $3)
@@ -74,11 +85,18 @@ func (q *Queries) GetMerchantBySlug(ctx context.Context, slug string) (Merchant,
 }
 
 const listMerchants = `-- name: ListMerchants :many
-SELECT id, name, slug, status, created_at, updated_at FROM merchants ORDER BY created_at
+SELECT id, name, slug, status, created_at, updated_at FROM merchants
+ORDER BY created_at
+LIMIT $1 OFFSET $2
 `
 
-func (q *Queries) ListMerchants(ctx context.Context) ([]Merchant, error) {
-	rows, err := q.db.Query(ctx, listMerchants)
+type ListMerchantsParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+func (q *Queries) ListMerchants(ctx context.Context, arg ListMerchantsParams) ([]Merchant, error) {
+	rows, err := q.db.Query(ctx, listMerchants, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

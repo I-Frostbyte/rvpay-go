@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"sync"
@@ -20,9 +19,11 @@ import (
 	"github.com/I-Frostbyte/rvpay-go/clients/service"
 	"github.com/I-Frostbyte/rvpay-go/clients/webhooks"
 	clientsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/clientsgrpc"
+	commondatabase "github.com/I-Frostbyte/rvpay-go/shared/database"
+	commonlogger "github.com/I-Frostbyte/rvpay-go/shared/logger"
+	commonobservability "github.com/I-Frostbyte/rvpay-go/shared/observability"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -34,9 +35,13 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	logger := zerolog.New(os.Stderr).With().Timestamp().Caller().Logger()
+	logger, err := commonlogger.New("", os.Stderr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
+		os.Exit(1)
+	}
 
-	err := run(ctx, logger)
+	err = run(ctx, logger)
 	if err != nil {
 		logger.Err(err).Msg("failed to run grpc service")
 		os.Exit(1)
@@ -54,27 +59,21 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	}
 	logger.Info().Msg("successfully loaded configuration")
 
-	logLevel, err := zerolog.ParseLevel(cfg.LogLevel)
+	logger, err = commonlogger.New(cfg.LogLevel, os.Stderr)
 	if err != nil {
 		return fmt.Errorf("failed to parse log level: %w", err)
 	}
-	logger = logger.Level(logLevel)
 
 	dbConnectionURL := getPostgresConnectionURL(cfg.DB)
-	db, err := pgxpool.New(ctx, dbConnectionURL)
+	db, err := commondatabase.Connect(ctx, dbConnectionURL)
 	if err != nil {
-		return fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	err = db.Ping(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to ping database: %w", err)
+		return err
 	}
 	logger.Info().Msg("Successfully connected to database")
 	defer db.Close()
 
 	if cfg.RunMigrations {
-		err = repo.Migrate(dbConnectionURL, cfg.MigrationPath, logger)
+		err = commondatabase.Migrate(dbConnectionURL, cfg.MigrationPath, logger)
 		if err != nil {
 			logger.Err(err).Msg("Migration not successful...")
 			return fmt.Errorf("failed to migrate: %w", err)
@@ -92,7 +91,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	webhookSubscriptionRepo := repo.NewWebhookSubscriptionRepo(clientsRepo.Do())
 
 	providerRegistry := providers.NewProviderRegistry()
-	highLevelProvider := providers.NewHighLevelProvider(cfg.HighLevel.ClientID, cfg.HighLevel.ClientSecret, cfg.HighLevel.RedirectURI)
+	highLevelProvider := providers.NewHighLevelProvider(cfg.HighLevel.ClientID, cfg.HighLevel.ClientSecret, cfg.HighLevel.RedirectURI, cfg.Webhook.Secret)
 	providerRegistry.Register(highLevelProvider)
 	logger.Info().Msg("providers registered successfully")
 
@@ -100,12 +99,13 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	platformsService := service.NewPlatformsServiceImpl(platformRepo, logger)
 	integrationsService := service.NewIntegrationsServiceImpl(integrationRepo, clientRepo, platformRepo, oauthTokenRepo, webhookSubscriptionRepo, logger)
 
-	oauth.NewService(integrationRepo, oauthTokenRepo, clientRepo, platformRepo, providerRegistry, logger)
+	oauth.NewService(integrationRepo, oauthTokenRepo, clientRepo, platformRepo, providerRegistry, cfg.HighLevel.RedirectURI, logger)
 	webhooks.NewService(integrationRepo, webhookSubscriptionRepo, platformRepo, providerRegistry, logger)
 
 	svrOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
 			grpc_recovery.UnaryServerInterceptor(),
+			commonobservability.UnaryServerInterceptor(logger),
 		),
 	}
 
@@ -140,7 +140,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	}
 
 	httpMux := http.NewServeMux()
-	httpMux.Handle("/", gatewayMux)
+	httpMux.Handle("/", commonobservability.AccessLog(logger)(gatewayMux))
 	httpMux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -229,20 +229,5 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 }
 
 func getPostgresConnectionURL(cfg config.DBConfig) string {
-	queryValues := url.Values{}
-	if cfg.TLSDisabled {
-		queryValues.Add("sslmode", "disable")
-	} else {
-		queryValues.Add("sslmode", "require")
-	}
-
-	dbURL := url.URL{
-		Scheme:   "postgres",
-		User:     url.UserPassword(cfg.DBUser, cfg.DBPassword),
-		Host:     fmt.Sprintf("%s:%d", cfg.DBHost, cfg.DBPort),
-		Path:     cfg.DBName,
-		RawQuery: queryValues.Encode(),
-	}
-
-	return dbURL.String()
+	return commondatabase.PostgresURL(cfg.DBUser, cfg.DBPassword, cfg.DBPort, cfg.DBHost, cfg.DBName, cfg.TLSDisabled)
 }

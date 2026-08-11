@@ -219,4 +219,3 @@ func (s *ClientsServiceImpl) DeactivateClient(ctx context.Context, req *clientsg
 		Client: sqlcClientToProto(updated),
 	}, nil
 }
-

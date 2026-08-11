@@ -7,9 +7,9 @@ import (
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/clients/db/sqlc"
 	"github.com/I-Frostbyte/rvpay-go/clients/providers"
-	"github.com/rs/zerolog"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -239,7 +239,7 @@ func TestProcessWebhookInvalidSignature(t *testing.T) {
 	t.Parallel()
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback"))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret"))
 
 	svc := NewService(
 		newMockWebhookIntegrationRepo(),
@@ -260,7 +260,7 @@ func TestRegisterWebhookIntegrationNotFound(t *testing.T) {
 	t.Parallel()
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback"))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret"))
 
 	svc := NewService(
 		newMockWebhookIntegrationRepo(),
@@ -280,7 +280,7 @@ func TestUnregisterWebhookNotFound(t *testing.T) {
 	t.Parallel()
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback"))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret"))
 
 	svc := NewService(
 		newMockWebhookIntegrationRepo(),

@@ -13,7 +13,7 @@ generate:
 
 generate-protos:
 	@echo "Generating protobuf code..."
-	cd ../protobuf && make generate
+	cd ../protobuf && make generate-protos
 
 generate-sql:
 	@echo "Generating sqlc code..."

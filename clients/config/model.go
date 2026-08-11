@@ -7,22 +7,22 @@ import (
 
 // Config holds all configuration for the Clients service.
 type Config struct {
-	LogLevel       string
-	ListenPort     int
-	DB             DBConfig
-	MigrationPath  string
-	RunMigrations  bool
-	HighLevel      HighLevelConfig
-	Webhook        WebhookConfig
+	LogLevel      string
+	ListenPort    int
+	DB            DBConfig
+	MigrationPath string
+	RunMigrations bool
+	HighLevel     HighLevelConfig
+	Webhook       WebhookConfig
 }
 
 // DBConfig holds database configuration.
 type DBConfig struct {
-	DBHost     string
-	DBPort     int
-	DBName     string
-	DBUser     string
-	DBPassword string
+	DBHost      string
+	DBPort      int
+	DBName      string
+	DBUser      string
+	DBPassword  string
 	TLSDisabled bool
 }
 

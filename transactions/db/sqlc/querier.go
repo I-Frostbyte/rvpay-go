@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	CountMerchants(ctx context.Context) (int64, error)
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
 	CreateDeposit(ctx context.Context, arg CreateDepositParams) (Deposit, error)
 	CreateMerchant(ctx context.Context, arg CreateMerchantParams) (Merchant, error)
@@ -31,7 +32,7 @@ type Querier interface {
 	ListDepositsByCustomer(ctx context.Context, customerID uuid.UUID) ([]Deposit, error)
 	ListDepositsByMerchant(ctx context.Context, merchantID uuid.UUID) ([]Deposit, error)
 	ListDepositsByStatus(ctx context.Context, status DepositStatus) ([]Deposit, error)
-	ListMerchants(ctx context.Context) ([]Merchant, error)
+	ListMerchants(ctx context.Context, arg ListMerchantsParams) ([]Merchant, error)
 	ListPayoutsByClient(ctx context.Context, clientID uuid.UUID) ([]Payout, error)
 	ListPayoutsByMerchant(ctx context.Context, merchantID uuid.UUID) ([]Payout, error)
 	ListPayoutsByStatus(ctx context.Context, status PayoutStatus) ([]Payout, error)
