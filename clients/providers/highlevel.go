@@ -15,15 +15,15 @@ import (
 
 // HighLevelProvider implements the unified Provider interface for HighLevel.
 type HighLevelProvider struct {
-	clientID          string
-	clientSecret      string
-	webhookPublicKey  string
-	redirectURI       string
-	authURL           string
-	tokenURL          string
-	userInfoURL       string
-	scopes            []string
-	httpClient        *http.Client
+	clientID         string
+	clientSecret     string
+	webhookPublicKey string
+	redirectURI      string
+	authURL          string
+	tokenURL         string
+	userInfoURL      string
+	scopes           []string
+	httpClient       *http.Client
 }
 
 // NewHighLevelProvider creates a new HighLevel provider. webhookPublicKey is
