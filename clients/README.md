@@ -100,8 +100,8 @@ cp .env.example .env
 | `MIGRATION_PATH` | No; defaults to `db/migrations` | Migration directory |
 | `HIGHLEVEL_CLIENT_ID` | Yes | HighLevel OAuth client ID |
 | `HIGHLEVEL_CLIENT_SECRET` | Yes | HighLevel OAuth client secret |
-| `HIGHLEVEL_REDIRECT_URI` | No; defaults to `https://api.rvpay.com/v1/public/oauth/callback` | OAuth callback URL |
-| `WEBHOOK_SECRET` | Yes | HighLevel webhook verification secret |
+| `HIGHLEVEL_REDIRECT_URI` | Yes | Publicly reachable OAuth callback URL, e.g. `https://<render-client-host>/oauth/callback` |
+| `HIGHLEVEL_WEBHOOK_PUBLIC_KEY` | Yes | PEM-encoded Ed25519 public key used to verify `X-GHL-Signature` webhook signatures. This is PUBLIC cryptographic material, not a private secret. |
 
 ## Local startup
 
@@ -193,11 +193,62 @@ The Clients service is compatible with:
 - **Docker** — Multi-stage build with distroless runtime
 - **Kubernetes** — Standard Go binary deployment
 
+## GoHighLevel integration
+
+The Clients service is the owner of the GoHighLevel (GHL) Marketplace
+integration. It exposes two direct HTTP endpoints (not grpc-gateway RPCs)
+because they are external provider/browser-facing:
+
+| Route | Method | Purpose |
+| --- | --- | --- |
+| `/oauth/callback` | GET | GHL OAuth authorization callback (`code` + `state` query params) |
+| `/webhooks/highlevel` | POST | GHL webhook deliveries (`X-GHL-Signature` header) |
+
+### OAuth flow
+
+1. `BeginAuthorization(clientID, platformID)` generates a cryptographically
+   random state, persists it (with the client/platform context and a 10-minute
+   expiry) in the `oauth_states` table, and returns the GHL authorization URL.
+2. GHL redirects the user to `HIGHLEVEL_REDIRECT_URI` (`/oauth/callback`) with
+   `code` and `state`.
+3. `HandleCallback(code, state)` atomically consumes the state (rejecting
+   missing, expired, or already-consumed states to prevent CSRF/replay), recovers
+   the client/platform context, exchanges the code for tokens, and creates the
+   integration.
+
+### Webhook flow
+
+1. GHL POSTs to `/webhooks/highlevel` with the raw JSON body and an
+   `X-GHL-Signature` header (base64-encoded Ed25519 signature over the raw body).
+2. The handler reads the raw body bytes and passes them (unmodified) to the
+   webhook service.
+3. The HighLevel provider verifies the signature against the raw body using the
+   configured `HIGHLEVEL_WEBHOOK_PUBLIC_KEY`. Missing, malformed, and invalid
+   signatures are rejected with HTTP 400.
+4. The event is parsed and recorded in the `webhook_events` table. The unique
+   constraint on `(integration_id, provider_event_id)` plus `ON CONFLICT DO
+   NOTHING` makes duplicate deliveries race-safe and idempotent; duplicates are
+   acknowledged with HTTP 200 so the provider stops retrying.
+5. The event is dispatched to the HighLevel dispatcher.
+
+### GHL Marketplace configuration
+
+Configure the GHL Marketplace app with:
+
+- **Client ID** → `HIGHLEVEL_CLIENT_ID`
+- **Client Secret** → `HIGHLEVEL_CLIENT_SECRET`
+- **Redirect URL** → `https://<render-client-host>/oauth/callback`
+- **Webhook URL** → `https://<render-client-host>/webhooks/highlevel`
+- **Webhook Verification** → `X-GHL-Signature` / Ed25519
+- **Public Key** → `HIGHLEVEL_WEBHOOK_PUBLIC_KEY`
+
+The Render hostname is supplied through deployment configuration
+(`HIGHLEVEL_REDIRECT_URI`); it is never hard-coded.
+
 ## Current behavior and limitations
 
 - OAuth flows are implemented for HighLevel provider only.
 - Webhook processing is implemented for HighLevel provider only.
 - Token refresh is manual; no automatic scheduling is implemented.
-- Webhook deduplication uses subscription lookup; full event deduplication
-  requires a `webhook_events` table.
+- Webhook deduplication is enforced via the `webhook_events` table.
 - No authentication or authorization is implemented at the transport layer.

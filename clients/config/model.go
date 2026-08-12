@@ -13,7 +13,6 @@ type Config struct {
 	MigrationPath string
 	RunMigrations bool
 	HighLevel     HighLevelConfig
-	Webhook       WebhookConfig
 }
 
 // DBConfig holds database configuration.
@@ -31,11 +30,10 @@ type HighLevelConfig struct {
 	ClientID     string
 	ClientSecret string
 	RedirectURI  string
-}
-
-// WebhookConfig holds webhook configuration.
-type WebhookConfig struct {
-	Secret string
+	// WebhookPublicKey is the PEM-encoded Ed25519 public key used to verify
+	// HighLevel webhook signatures (HIGHLEVEL_WEBHOOK_PUBLIC_KEY). It is
+	// public cryptographic material, not a private credential.
+	WebhookPublicKey string
 }
 
 // LoadConfig loads configuration from environment variables.
@@ -54,9 +52,8 @@ func (c *Config) LoadConfig() error {
 
 	c.HighLevel.ClientID = getEnv("HIGHLEVEL_CLIENT_ID", "")
 	c.HighLevel.ClientSecret = getEnv("HIGHLEVEL_CLIENT_SECRET", "")
-	c.HighLevel.RedirectURI = getEnv("HIGHLEVEL_REDIRECT_URI", "https://api.rvpay.com/v1/public/oauth/callback")
-
-	c.Webhook.Secret = getEnv("WEBHOOK_SECRET", "")
+	c.HighLevel.RedirectURI = getEnv("HIGHLEVEL_REDIRECT_URI", "")
+	c.HighLevel.WebhookPublicKey = getEnv("HIGHLEVEL_WEBHOOK_PUBLIC_KEY", "")
 
 	return nil
 }

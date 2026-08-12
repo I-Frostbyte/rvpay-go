@@ -2,6 +2,7 @@ package webhooks
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
@@ -16,6 +17,7 @@ import (
 type Service struct {
 	integrationsRepo repo.IntegrationRepo
 	webhookRepo      repo.WebhookSubscriptionRepo
+	webhookEventRepo repo.WebhookEventRepo
 	platformsRepo    repo.PlatformRepo
 	registry         providers.ProviderRegistry
 	logger           zerolog.Logger
@@ -25,6 +27,7 @@ type Service struct {
 func NewService(
 	integrationsRepo repo.IntegrationRepo,
 	webhookRepo repo.WebhookSubscriptionRepo,
+	webhookEventRepo repo.WebhookEventRepo,
 	platformsRepo repo.PlatformRepo,
 	registry providers.ProviderRegistry,
 	logger zerolog.Logger,
@@ -32,6 +35,7 @@ func NewService(
 	return &Service{
 		integrationsRepo: integrationsRepo,
 		webhookRepo:      webhookRepo,
+		webhookEventRepo: webhookEventRepo,
 		platformsRepo:    platformsRepo,
 		registry:         registry,
 		logger:           logger,
@@ -173,8 +177,25 @@ func (s *Service) ProcessWebhook(ctx context.Context, providerID string, headers
 		return translateError(err)
 	}
 
-	// Duplicate detection: if webhook exists, log and continue
-	// In production, this would check a webhook_events table for provider_event_id
+	// Idempotency: record the event atomically. The unique constraint on
+	// (integration_id, provider_event_id) plus ON CONFLICT DO NOTHING makes
+	// duplicate deliveries race-safe: a concurrent retry of the same event
+	// will not insert a second row and is treated as a duplicate.
+	payload, err := json.Marshal(event.Payload)
+	if err != nil {
+		s.logger.Error().Err(err).Str("event_id", event.ProviderEventID).Msg("Webhook payload marshal failed")
+		return ErrInvalidPayload
+	}
+
+	_, err = s.webhookEventRepo.Create(ctx, integrationID, event.ProviderEventID, event.EventType, payload)
+	if err == repo.ErrDuplicate {
+		s.logger.Info().Str("event_id", event.ProviderEventID).Str("integration_id", integrationID.String()).Msg("Duplicate webhook event ignored")
+		return ErrDuplicateEvent
+	}
+	if err != nil {
+		return translateError(err)
+	}
+
 	s.logger.Info().Str("event_id", event.ProviderEventID).Str("integration_id", integrationID.String()).Msg("Webhook subscription exists, processing event")
 
 	lastDelivery := pgtype.Timestamptz{Time: time.Now(), Valid: true}

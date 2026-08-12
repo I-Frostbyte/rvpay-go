@@ -18,19 +18,24 @@ type Service struct {
 	oauthRepo        repo.OAuthTokenRepo
 	clientsRepo      repo.ClientRepo
 	platformsRepo    repo.PlatformRepo
+	oauthStateRepo   repo.OAuthStateRepo
 	registry         providers.ProviderRegistry
 	redirectURI      string
+	stateTTL         time.Duration
 	logger           zerolog.Logger
 }
 
 // NewService creates a new OAuth service. redirectURI is the configured
 // callback URL used for the OAuth authorization and token exchange; it must
 // come from configuration (HIGHLEVEL_REDIRECT_URI), never be hard-coded.
+// oauthStateRepo persists OAuth state so the callback can securely recover
+// the client/platform context and resist CSRF/replay attacks.
 func NewService(
 	integrationsRepo repo.IntegrationRepo,
 	oauthRepo repo.OAuthTokenRepo,
 	clientsRepo repo.ClientRepo,
 	platformsRepo repo.PlatformRepo,
+	oauthStateRepo repo.OAuthStateRepo,
 	registry providers.ProviderRegistry,
 	redirectURI string,
 	logger zerolog.Logger,
@@ -40,8 +45,10 @@ func NewService(
 		oauthRepo:        oauthRepo,
 		clientsRepo:      clientsRepo,
 		platformsRepo:    platformsRepo,
+		oauthStateRepo:   oauthStateRepo,
 		registry:         registry,
 		redirectURI:      redirectURI,
+		stateTTL:         10 * time.Minute,
 		logger:           logger,
 	}
 }
@@ -73,6 +80,95 @@ func (s *Service) AuthorizationURL(ctx context.Context, clientID, platformID uui
 	s.logger.Info().Str("client_id", clientID.String()).Str("platform_id", platformID.String()).Str("provider", provider.ID()).Msg("OAuth authorization URL generated")
 
 	return authURL, nil
+}
+
+// BeginAuthorization starts an OAuth authorization flow for a client and
+// platform. It generates a cryptographically random state, persists it with
+// the client/platform context and an expiry, and returns the provider
+// authorization URL. The returned state must be validated by HandleCallback
+// when the provider redirects the user back.
+func (s *Service) BeginAuthorization(ctx context.Context, clientID, platformID uuid.UUID) (authURL, state string, err error) {
+	platform, err := s.platformsRepo.GetByID(ctx, platformID)
+	if err == repo.ErrNotFound {
+		return "", "", ErrPlatformNotFound
+	}
+	if err != nil {
+		return "", "", translateError(err)
+	}
+
+	if !platform.Enabled {
+		return "", "", ErrPlatformDisabled
+	}
+
+	client, err := s.clientsRepo.GetByID(ctx, clientID)
+	if err == repo.ErrNotFound {
+		return "", "", ErrClientNotFound
+	}
+	if err != nil {
+		return "", "", translateError(err)
+	}
+
+	if client.Status != sqlc.ClientStatusACTIVE {
+		return "", "", ErrClientInactive
+	}
+
+	provider, ok := s.registry.Get(platform.Slug)
+	if !ok {
+		return "", "", ErrProviderNotSupported
+	}
+
+	state, err = providers.GenerateState()
+	if err != nil {
+		return "", "", err
+	}
+
+	_, err = s.oauthStateRepo.Create(ctx, state, clientID, platformID, time.Now().Add(s.stateTTL))
+	if err != nil {
+		return "", "", translateError(err)
+	}
+
+	authURL, err = provider.OAuthProvider().GenerateAuthorizationURL(ctx, state, s.redirectURI)
+	if err != nil {
+		return "", "", err
+	}
+
+	s.logger.Info().Str("client_id", clientID.String()).Str("platform_id", platformID.String()).Str("provider", provider.ID()).Msg("OAuth authorization flow started")
+
+	return authURL, state, nil
+}
+
+// HandleCallback processes an OAuth callback from a provider. It validates the
+// state (must exist, be unexpired, and be unconsumed), atomically consumes it
+// to prevent replay, recovers the client/platform context, and then completes
+// the token exchange and integration creation.
+func (s *Service) HandleCallback(ctx context.Context, code, state string) (*CallbackResult, error) {
+	if code == "" {
+		return nil, ErrMissingCode
+	}
+	if state == "" {
+		return nil, ErrMissingState
+	}
+
+	// Atomically consume the state. ConsumeOAuthState only succeeds when the
+	// state exists, is not already consumed, and has not expired. This both
+	// validates the state and prevents replay attacks in a single operation.
+	record, err := s.oauthStateRepo.Consume(ctx, state)
+	if err == repo.ErrNotFound {
+		// Distinguish expired/consumed from unknown for clearer errors.
+		existing, getErr := s.oauthStateRepo.GetByState(ctx, state)
+		if getErr == nil {
+			if existing.ConsumedAt.Valid {
+				return nil, ErrStateConsumed
+			}
+			return nil, ErrStateExpired
+		}
+		return nil, ErrInvalidState
+	}
+	if err != nil {
+		return nil, translateError(err)
+	}
+
+	return s.ProcessCallback(ctx, record.ClientID, record.PlatformID, code, state)
 }
 
 // CallbackResult represents the result of an OAuth callback.

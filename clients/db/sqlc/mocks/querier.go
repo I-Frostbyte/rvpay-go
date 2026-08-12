@@ -57,6 +57,21 @@ func (mr *MockQuerierMockRecorder) ClientExistsByID(ctx, id any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClientExistsByID", reflect.TypeOf((*MockQuerier)(nil).ClientExistsByID), ctx, id)
 }
 
+// ConsumeOAuthState mocks base method.
+func (m *MockQuerier) ConsumeOAuthState(ctx context.Context, state string) (sqlc.OauthState, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConsumeOAuthState", ctx, state)
+	ret0, _ := ret[0].(sqlc.OauthState)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ConsumeOAuthState indicates an expected call of ConsumeOAuthState.
+func (mr *MockQuerierMockRecorder) ConsumeOAuthState(ctx, state any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConsumeOAuthState", reflect.TypeOf((*MockQuerier)(nil).ConsumeOAuthState), ctx, state)
+}
+
 // CountClients mocks base method.
 func (m *MockQuerier) CountClients(ctx context.Context) (int64, error) {
 	m.ctrl.T.Helper()
@@ -147,6 +162,21 @@ func (mr *MockQuerierMockRecorder) CreateIntegration(ctx, arg any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateIntegration", reflect.TypeOf((*MockQuerier)(nil).CreateIntegration), ctx, arg)
 }
 
+// CreateOAuthState mocks base method.
+func (m *MockQuerier) CreateOAuthState(ctx context.Context, arg sqlc.CreateOAuthStateParams) (sqlc.OauthState, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateOAuthState", ctx, arg)
+	ret0, _ := ret[0].(sqlc.OauthState)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateOAuthState indicates an expected call of CreateOAuthState.
+func (mr *MockQuerierMockRecorder) CreateOAuthState(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOAuthState", reflect.TypeOf((*MockQuerier)(nil).CreateOAuthState), ctx, arg)
+}
+
 // CreateOAuthToken mocks base method.
 func (m *MockQuerier) CreateOAuthToken(ctx context.Context, arg sqlc.CreateOAuthTokenParams) (sqlc.OauthToken, error) {
 	m.ctrl.T.Helper()
@@ -177,6 +207,21 @@ func (mr *MockQuerierMockRecorder) CreatePlatform(ctx, arg any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePlatform", reflect.TypeOf((*MockQuerier)(nil).CreatePlatform), ctx, arg)
 }
 
+// CreateWebhookEvent mocks base method.
+func (m *MockQuerier) CreateWebhookEvent(ctx context.Context, arg sqlc.CreateWebhookEventParams) (sqlc.WebhookEvent, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateWebhookEvent", ctx, arg)
+	ret0, _ := ret[0].(sqlc.WebhookEvent)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateWebhookEvent indicates an expected call of CreateWebhookEvent.
+func (mr *MockQuerierMockRecorder) CreateWebhookEvent(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateWebhookEvent", reflect.TypeOf((*MockQuerier)(nil).CreateWebhookEvent), ctx, arg)
+}
+
 // CreateWebhookSubscription mocks base method.
 func (m *MockQuerier) CreateWebhookSubscription(ctx context.Context, arg sqlc.CreateWebhookSubscriptionParams) (sqlc.WebhookSubscription, error) {
 	m.ctrl.T.Helper()
@@ -205,6 +250,21 @@ func (m *MockQuerier) DeleteClient(ctx context.Context, id uuid.UUID) (int64, er
 func (mr *MockQuerierMockRecorder) DeleteClient(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteClient", reflect.TypeOf((*MockQuerier)(nil).DeleteClient), ctx, id)
+}
+
+// DeleteExpiredOAuthStates mocks base method.
+func (m *MockQuerier) DeleteExpiredOAuthStates(ctx context.Context) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteExpiredOAuthStates", ctx)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteExpiredOAuthStates indicates an expected call of DeleteExpiredOAuthStates.
+func (mr *MockQuerierMockRecorder) DeleteExpiredOAuthStates(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteExpiredOAuthStates", reflect.TypeOf((*MockQuerier)(nil).DeleteExpiredOAuthStates), ctx)
 }
 
 // DeleteIntegration mocks base method.
@@ -357,6 +417,21 @@ func (mr *MockQuerierMockRecorder) GetIntegrationByID(ctx, id any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIntegrationByID", reflect.TypeOf((*MockQuerier)(nil).GetIntegrationByID), ctx, id)
 }
 
+// GetOAuthStateByState mocks base method.
+func (m *MockQuerier) GetOAuthStateByState(ctx context.Context, state string) (sqlc.OauthState, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOAuthStateByState", ctx, state)
+	ret0, _ := ret[0].(sqlc.OauthState)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOAuthStateByState indicates an expected call of GetOAuthStateByState.
+func (mr *MockQuerierMockRecorder) GetOAuthStateByState(ctx, state any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOAuthStateByState", reflect.TypeOf((*MockQuerier)(nil).GetOAuthStateByState), ctx, state)
+}
+
 // GetOAuthTokenByID mocks base method.
 func (m *MockQuerier) GetOAuthTokenByID(ctx context.Context, id uuid.UUID) (sqlc.OauthToken, error) {
 	m.ctrl.T.Helper()
@@ -430,6 +505,21 @@ func (m *MockQuerier) GetPlatformBySlug(ctx context.Context, slug string) (sqlc.
 func (mr *MockQuerierMockRecorder) GetPlatformBySlug(ctx, slug any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlatformBySlug", reflect.TypeOf((*MockQuerier)(nil).GetPlatformBySlug), ctx, slug)
+}
+
+// GetWebhookEventByIntegrationAndProvider mocks base method.
+func (m *MockQuerier) GetWebhookEventByIntegrationAndProvider(ctx context.Context, arg sqlc.GetWebhookEventByIntegrationAndProviderParams) (sqlc.WebhookEvent, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWebhookEventByIntegrationAndProvider", ctx, arg)
+	ret0, _ := ret[0].(sqlc.WebhookEvent)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetWebhookEventByIntegrationAndProvider indicates an expected call of GetWebhookEventByIntegrationAndProvider.
+func (mr *MockQuerierMockRecorder) GetWebhookEventByIntegrationAndProvider(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWebhookEventByIntegrationAndProvider", reflect.TypeOf((*MockQuerier)(nil).GetWebhookEventByIntegrationAndProvider), ctx, arg)
 }
 
 // GetWebhookSubscriptionByID mocks base method.

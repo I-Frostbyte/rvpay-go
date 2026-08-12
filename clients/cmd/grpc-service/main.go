@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	clientshttp "github.com/I-Frostbyte/rvpay-go/clients/http"
 	"github.com/I-Frostbyte/rvpay-go/clients/config"
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/clients/oauth"
@@ -89,9 +90,11 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	integrationRepo := repo.NewIntegrationRepo(clientsRepo.Do())
 	oauthTokenRepo := repo.NewOAuthTokenRepo(clientsRepo.Do())
 	webhookSubscriptionRepo := repo.NewWebhookSubscriptionRepo(clientsRepo.Do())
+	oauthStateRepo := repo.NewOAuthStateRepo(clientsRepo.Do())
+	webhookEventRepo := repo.NewWebhookEventRepo(clientsRepo.Do())
 
 	providerRegistry := providers.NewProviderRegistry()
-	highLevelProvider := providers.NewHighLevelProvider(cfg.HighLevel.ClientID, cfg.HighLevel.ClientSecret, cfg.HighLevel.RedirectURI, cfg.Webhook.Secret)
+	highLevelProvider := providers.NewHighLevelProvider(cfg.HighLevel.ClientID, cfg.HighLevel.ClientSecret, cfg.HighLevel.RedirectURI, cfg.HighLevel.WebhookPublicKey)
 	providerRegistry.Register(highLevelProvider)
 	logger.Info().Msg("providers registered successfully")
 
@@ -99,8 +102,10 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	platformsService := service.NewPlatformsServiceImpl(platformRepo, logger)
 	integrationsService := service.NewIntegrationsServiceImpl(integrationRepo, clientRepo, platformRepo, oauthTokenRepo, webhookSubscriptionRepo, logger)
 
-	oauth.NewService(integrationRepo, oauthTokenRepo, clientRepo, platformRepo, providerRegistry, cfg.HighLevel.RedirectURI, logger)
-	webhooks.NewService(integrationRepo, webhookSubscriptionRepo, platformRepo, providerRegistry, logger)
+	oauthService := oauth.NewService(integrationRepo, oauthTokenRepo, clientRepo, platformRepo, oauthStateRepo, providerRegistry, cfg.HighLevel.RedirectURI, logger)
+	webhookService := webhooks.NewService(integrationRepo, webhookSubscriptionRepo, webhookEventRepo, platformRepo, providerRegistry, logger)
+	oauthHandler := clientshttp.NewOAuthHandler(oauthService, logger)
+	webhookHandler := clientshttp.NewWebhookHandler(webhookService, logger)
 
 	svrOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
@@ -153,6 +158,12 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+	// GoHighLevel OAuth callback and webhook delivery endpoints. These are
+	// registered as direct HTTP handlers (not grpc-gateway RPCs) because they
+	// are external provider/browser-facing endpoints, consistent with the
+	// project's protobuf transport strategy.
+	httpMux.HandleFunc("/oauth/callback", oauthHandler.Callback)
+	httpMux.HandleFunc("/webhooks/highlevel", webhookHandler.HighLevel)
 
 	httpPort := os.Getenv("PORT")
 	if httpPort == "" {

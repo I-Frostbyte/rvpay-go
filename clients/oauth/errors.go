@@ -33,6 +33,17 @@ var (
 	ErrOAuthTokenNotFound = status.Error(codes.NotFound, "OAuth token not found")
 	// ErrTokenRefreshFailed is returned when refreshing an access token fails.
 	ErrTokenRefreshFailed = status.Error(codes.Internal, "token refresh failed")
+	// ErrInvalidState is returned when the OAuth state is missing, unknown,
+	// expired, or already consumed.
+	ErrInvalidState = status.Error(codes.InvalidArgument, "invalid OAuth state")
+	// ErrStateExpired is returned when the OAuth state has expired.
+	ErrStateExpired = status.Error(codes.InvalidArgument, "OAuth state expired")
+	// ErrStateConsumed is returned when the OAuth state was already used.
+	ErrStateConsumed = status.Error(codes.InvalidArgument, "OAuth state already used")
+	// ErrMissingCode is returned when the OAuth callback is missing the code.
+	ErrMissingCode = status.Error(codes.InvalidArgument, "authorization code is required")
+	// ErrMissingState is returned when the OAuth callback is missing the state.
+	ErrMissingState = status.Error(codes.InvalidArgument, "OAuth state is required")
 )
 
 // translateError converts repository errors to business errors.

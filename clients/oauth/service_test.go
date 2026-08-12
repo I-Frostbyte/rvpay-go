@@ -340,6 +340,57 @@ func (m *mockIntegrationRepo) ExistsByID(ctx context.Context, id uuid.UUID) (boo
 	return ok, nil
 }
 
+// mockOAuthStateRepo is a test double for OAuthStateRepo
+type mockOAuthStateRepo struct {
+	states map[string]sqlc.OauthState
+}
+
+func newMockOAuthStateRepo() *mockOAuthStateRepo {
+	return &mockOAuthStateRepo{
+		states: make(map[string]sqlc.OauthState),
+	}
+}
+
+func (m *mockOAuthStateRepo) Create(ctx context.Context, state string, clientID, platformID uuid.UUID, expiresAt time.Time) (sqlc.OauthState, error) {
+	record := sqlc.OauthState{
+		ID:         uuid.New(),
+		State:      state,
+		ClientID:   clientID,
+		PlatformID: platformID,
+		ExpiresAt:  expiresAt,
+	}
+	m.states[state] = record
+	return record, nil
+}
+
+func (m *mockOAuthStateRepo) GetByState(ctx context.Context, state string) (sqlc.OauthState, error) {
+	record, ok := m.states[state]
+	if !ok {
+		return sqlc.OauthState{}, repo.ErrNotFound
+	}
+	return record, nil
+}
+
+func (m *mockOAuthStateRepo) Consume(ctx context.Context, state string) (sqlc.OauthState, error) {
+	record, ok := m.states[state]
+	if !ok {
+		return sqlc.OauthState{}, repo.ErrNotFound
+	}
+	if record.ConsumedAt.Valid {
+		return sqlc.OauthState{}, repo.ErrNotFound
+	}
+	if time.Now().After(record.ExpiresAt) {
+		return sqlc.OauthState{}, repo.ErrNotFound
+	}
+	record.ConsumedAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
+	m.states[state] = record
+	return record, nil
+}
+
+func (m *mockOAuthStateRepo) DeleteExpired(ctx context.Context) (int64, error) {
+	return 0, nil
+}
+
 // mockOAuthTokenRepo is a test double for OAuthTokenRepo
 type mockOAuthTokenRepo struct {
 	tokens map[string]sqlc.OauthToken
@@ -442,6 +493,7 @@ func TestAuthorizationURL(t *testing.T) {
 		newMockOAuthTokenRepo(),
 		newMockClientRepo(),
 		platformRepo,
+		newMockOAuthStateRepo(),
 		registry,
 		"https://example.com/callback",
 		zerolog.Nop(),
@@ -487,6 +539,7 @@ func TestAuthorizationURLDisabledPlatform(t *testing.T) {
 		newMockOAuthTokenRepo(),
 		newMockClientRepo(),
 		platformRepo,
+		newMockOAuthStateRepo(),
 		registry,
 		"https://example.com/callback",
 		zerolog.Nop(),
@@ -495,6 +548,212 @@ func TestAuthorizationURLDisabledPlatform(t *testing.T) {
 	_, err := svc.AuthorizationURL(context.Background(), uuid.New(), platformID, "test-state")
 	if status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("status code = %s, want %s", status.Code(err), codes.FailedPrecondition)
+	}
+}
+
+func TestBeginAuthorization(t *testing.T) {
+	t.Parallel()
+
+	clientRepo := newMockClientRepo()
+	platformRepo := newMockPlatformRepo()
+	stateRepo := newMockOAuthStateRepo()
+
+	clientID := uuid.New()
+	platformID := uuid.New()
+	clientRepo.clients[clientID.String()] = sqlc.Client{ID: clientID, Status: sqlc.ClientStatusACTIVE}
+	platformRepo.platforms[platformID.String()] = sqlc.Platform{ID: platformID, Name: "HighLevel", Slug: "highlevel", Enabled: true}
+
+	registry := providers.NewProviderRegistry()
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", ""))
+
+	svc := NewService(
+		newMockIntegrationRepo(),
+		newMockOAuthTokenRepo(),
+		clientRepo,
+		platformRepo,
+		stateRepo,
+		registry,
+		"https://example.com/callback",
+		zerolog.Nop(),
+	)
+
+	authURL, state, err := svc.BeginAuthorization(context.Background(), clientID, platformID)
+	if err != nil {
+		t.Fatalf("BeginAuthorization failed: %v", err)
+	}
+	if authURL == "" {
+		t.Fatal("authorization URL should not be empty")
+	}
+	if state == "" {
+		t.Fatal("state should not be empty")
+	}
+
+	// The state must be persisted so the callback can recover context.
+	if _, ok := stateRepo.states[state]; !ok {
+		t.Fatal("state was not persisted")
+	}
+
+	// The redirect_uri in the auth URL must be the configured value.
+	parsed, err := url.Parse(authURL)
+	if err != nil {
+		t.Fatalf("authorization URL unparseable: %v", err)
+	}
+	if got := parsed.Query().Get("redirect_uri"); got != "https://example.com/callback" {
+		t.Fatalf("redirect_uri = %q, want configured %q", got, "https://example.com/callback")
+	}
+}
+
+func TestBeginAuthorizationInactiveClient(t *testing.T) {
+	t.Parallel()
+
+	clientRepo := newMockClientRepo()
+	platformRepo := newMockPlatformRepo()
+
+	clientID := uuid.New()
+	platformID := uuid.New()
+	clientRepo.clients[clientID.String()] = sqlc.Client{ID: clientID, Status: sqlc.ClientStatusSUSPENDED}
+	platformRepo.platforms[platformID.String()] = sqlc.Platform{ID: platformID, Name: "HighLevel", Slug: "highlevel", Enabled: true}
+
+	registry := providers.NewProviderRegistry()
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", ""))
+
+	svc := NewService(
+		newMockIntegrationRepo(),
+		newMockOAuthTokenRepo(),
+		clientRepo,
+		platformRepo,
+		newMockOAuthStateRepo(),
+		registry,
+		"https://example.com/callback",
+		zerolog.Nop(),
+	)
+
+	_, _, err := svc.BeginAuthorization(context.Background(), clientID, platformID)
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.FailedPrecondition)
+	}
+}
+
+func TestHandleCallbackMissingCode(t *testing.T) {
+	t.Parallel()
+
+	svc := NewService(
+		newMockIntegrationRepo(),
+		newMockOAuthTokenRepo(),
+		newMockClientRepo(),
+		newMockPlatformRepo(),
+		newMockOAuthStateRepo(),
+		providers.NewProviderRegistry(),
+		"https://example.com/callback",
+		zerolog.Nop(),
+	)
+
+	_, err := svc.HandleCallback(context.Background(), "", "state")
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.InvalidArgument)
+	}
+}
+
+func TestHandleCallbackMissingState(t *testing.T) {
+	t.Parallel()
+
+	svc := NewService(
+		newMockIntegrationRepo(),
+		newMockOAuthTokenRepo(),
+		newMockClientRepo(),
+		newMockPlatformRepo(),
+		newMockOAuthStateRepo(),
+		providers.NewProviderRegistry(),
+		"https://example.com/callback",
+		zerolog.Nop(),
+	)
+
+	_, err := svc.HandleCallback(context.Background(), "code", "")
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.InvalidArgument)
+	}
+}
+
+func TestHandleCallbackInvalidState(t *testing.T) {
+	t.Parallel()
+
+	svc := NewService(
+		newMockIntegrationRepo(),
+		newMockOAuthTokenRepo(),
+		newMockClientRepo(),
+		newMockPlatformRepo(),
+		newMockOAuthStateRepo(),
+		providers.NewProviderRegistry(),
+		"https://example.com/callback",
+		zerolog.Nop(),
+	)
+
+	_, err := svc.HandleCallback(context.Background(), "code", "unknown-state")
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.InvalidArgument)
+	}
+}
+
+func TestHandleCallbackExpiredState(t *testing.T) {
+	t.Parallel()
+
+	stateRepo := newMockOAuthStateRepo()
+	clientID := uuid.New()
+	platformID := uuid.New()
+	stateRepo.states["expired-state"] = sqlc.OauthState{
+		ID:         uuid.New(),
+		State:      "expired-state",
+		ClientID:   clientID,
+		PlatformID: platformID,
+		ExpiresAt:  time.Now().Add(-time.Minute),
+	}
+
+	svc := NewService(
+		newMockIntegrationRepo(),
+		newMockOAuthTokenRepo(),
+		newMockClientRepo(),
+		newMockPlatformRepo(),
+		stateRepo,
+		providers.NewProviderRegistry(),
+		"https://example.com/callback",
+		zerolog.Nop(),
+	)
+
+	_, err := svc.HandleCallback(context.Background(), "code", "expired-state")
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.InvalidArgument)
+	}
+}
+
+func TestHandleCallbackConsumedState(t *testing.T) {
+	t.Parallel()
+
+	stateRepo := newMockOAuthStateRepo()
+	clientID := uuid.New()
+	platformID := uuid.New()
+	stateRepo.states["consumed-state"] = sqlc.OauthState{
+		ID:         uuid.New(),
+		State:      "consumed-state",
+		ClientID:   clientID,
+		PlatformID: platformID,
+		ExpiresAt:  time.Now().Add(time.Minute),
+		ConsumedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+	}
+
+	svc := NewService(
+		newMockIntegrationRepo(),
+		newMockOAuthTokenRepo(),
+		newMockClientRepo(),
+		newMockPlatformRepo(),
+		stateRepo,
+		providers.NewProviderRegistry(),
+		"https://example.com/callback",
+		zerolog.Nop(),
+	)
+
+	_, err := svc.HandleCallback(context.Background(), "code", "consumed-state")
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.InvalidArgument)
 	}
 }
 
@@ -517,6 +776,7 @@ func TestAuthorizationURLUnknownProvider(t *testing.T) {
 		newMockOAuthTokenRepo(),
 		newMockClientRepo(),
 		platformRepo,
+		newMockOAuthStateRepo(),
 		registry,
 		"https://example.com/callback",
 		zerolog.Nop(),
