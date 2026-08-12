@@ -330,3 +330,30 @@ truth.
 Current completed endpoint:
 
 **Platform 12 — Final Review** (platform sequence complete)
+
+## Temporary Free-Tier Database Migration Workaround
+
+Render Free tier currently provides one PostgreSQL database shared by
+Clients and Transactions.
+
+Clients and Transactions retain independent migration numbering.
+
+Because both services use the same schema_migrations table, they cannot
+automatically execute their independent migration histories against the
+same database.
+
+Current temporary deployment procedure:
+
+1. Run Clients migrations first.
+2. Verify Clients schema is present.
+3. Reset/remove the shared schema_migrations table using TablePlus.
+4. Run Transactions migrations.
+5. Verify Transactions schema is present.
+6. Do not allow both services to independently race migrations.
+
+This is an intentional temporary workaround for the Render Free-tier
+environment and should NOT be treated as the permanent production
+migration architecture.
+
+If the project moves to separate databases or a permanent shared
+database architecture, revisit the migration strategy.
