@@ -2,9 +2,11 @@ package providers
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -88,16 +90,27 @@ func TestProviderRegistry(t *testing.T) {
 	logger.Info().Msg("provider registry tests passed")
 }
 
-func TestHighLevelWebhookSecretIsUsedForSignatureVerification(t *testing.T) {
+func TestHighLevelWebhookPublicKeyIsUsedForSignatureVerification(t *testing.T) {
 	t.Parallel()
 
 	// SECURITY REGRESSION TEST (SEC-03): the webhook signature must be verified
-	// with the distinct webhook secret (WEBHOOK_SECRET), never the OAuth client
-	// secret. A signature computed with the webhook secret must verify; a
-	// signature computed with the client secret must be rejected.
+	// with the distinct Ed25519 public key (HIGHLEVEL_WEBHOOK_PUBLIC_KEY), never
+	// the OAuth client secret. A signature produced by the matching private key
+	// must verify; a signature from a different key must be rejected.
 	clientSecret := "oauth-client-secret"
-	webhookSecret := "distinct-webhook-secret"
-	provider := NewHighLevelProvider("client-id", clientSecret, "https://example.com/callback", webhookSecret)
+
+	// Generate a key pair for the webhook public key.
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate ed25519 key: %v", err)
+	}
+	pubBytes, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		t.Fatalf("marshal public key: %v", err)
+	}
+	webhookPublicKey := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes}))
+
+	provider := NewHighLevelProvider("client-id", clientSecret, "https://example.com/callback", webhookPublicKey)
 
 	whp := provider.WebhookProvider()
 	if whp == nil {
@@ -105,27 +118,28 @@ func TestHighLevelWebhookSecretIsUsedForSignatureVerification(t *testing.T) {
 	}
 
 	body := []byte(`{"eventId":"evt_1","eventType":"integration.installed"}`)
-	timestamp := "1720000000"
 
-	sign := func(secret string) string {
-		h := hmac.New(sha256.New, []byte(secret))
-		h.Write([]byte(timestamp + string(body)))
-		return hex.EncodeToString(h.Sum(nil))
+	sign := func(key ed25519.PrivateKey) string {
+		sig := ed25519.Sign(key, body)
+		return base64.StdEncoding.EncodeToString(sig)
 	}
 
 	headers := map[string]string{
-		"X-HighLevel-Signature": sign(webhookSecret),
-		"X-HighLevel-Timestamp": timestamp,
+		"X-GHL-Signature": sign(priv),
 	}
 	if err := whp.VerifyRequest(context.Background(), headers, body); err != nil {
-		t.Fatalf("signature with the webhook secret must verify, got error: %v", err)
+		t.Fatalf("signature with the matching private key must verify, got error: %v", err)
 	}
 
+	// A signature from a different key must be rejected.
+	_, otherPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate other ed25519 key: %v", err)
+	}
 	badHeaders := map[string]string{
-		"X-HighLevel-Signature": sign(clientSecret),
-		"X-HighLevel-Timestamp": timestamp,
+		"X-GHL-Signature": sign(otherPriv),
 	}
 	if err := whp.VerifyRequest(context.Background(), badHeaders, body); err == nil {
-		t.Fatal("signature with the OAuth client secret must be rejected")
+		t.Fatal("signature from a different key must be rejected")
 	}
 }

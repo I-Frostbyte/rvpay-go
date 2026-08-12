@@ -51,7 +51,7 @@ services:
         sync: false
       - key: HIGHLEVEL_REDIRECT_URI
         sync: false
-      - key: WEBHOOK_SECRET
+      - key: HIGHLEVEL_WEBHOOK_PUBLIC_KEY
         sync: false
 
   - type: web

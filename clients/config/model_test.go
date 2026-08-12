@@ -22,7 +22,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 	os.Unsetenv("HIGHLEVEL_CLIENT_ID")
 	os.Unsetenv("HIGHLEVEL_CLIENT_SECRET")
 	os.Unsetenv("HIGHLEVEL_REDIRECT_URI")
-	os.Unsetenv("WEBHOOK_SECRET")
+	os.Unsetenv("HIGHLEVEL_WEBHOOK_PUBLIC_KEY")
 
 	cfg := Config{}
 	err := cfg.LoadConfig()
@@ -57,8 +57,11 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.MigrationPath != "db/migrations" {
 		t.Fatalf("MigrationPath = %s, want db/migrations", cfg.MigrationPath)
 	}
-	if cfg.HighLevel.RedirectURI != "https://api.rvpay.com/v1/public/oauth/callback" {
-		t.Fatalf("RedirectURI = %s, want default", cfg.HighLevel.RedirectURI)
+	if cfg.HighLevel.RedirectURI != "" {
+		t.Fatalf("RedirectURI = %s, want empty default", cfg.HighLevel.RedirectURI)
+	}
+	if cfg.HighLevel.WebhookPublicKey != "" {
+		t.Fatalf("WebhookPublicKey = %s, want empty default", cfg.HighLevel.WebhookPublicKey)
 	}
 }
 
@@ -78,7 +81,7 @@ func TestLoadConfigEnvironmentOverrides(t *testing.T) {
 	os.Setenv("HIGHLEVEL_CLIENT_ID", "test-client-id")
 	os.Setenv("HIGHLEVEL_CLIENT_SECRET", "test-client-secret")
 	os.Setenv("HIGHLEVEL_REDIRECT_URI", "https://test.example.com/callback")
-	os.Setenv("WEBHOOK_SECRET", "test-webhook-secret")
+	os.Setenv("HIGHLEVEL_WEBHOOK_PUBLIC_KEY", "test-webhook-public-key")
 
 	defer func() {
 		os.Unsetenv("LOG_LEVEL")
@@ -94,7 +97,7 @@ func TestLoadConfigEnvironmentOverrides(t *testing.T) {
 		os.Unsetenv("HIGHLEVEL_CLIENT_ID")
 		os.Unsetenv("HIGHLEVEL_CLIENT_SECRET")
 		os.Unsetenv("HIGHLEVEL_REDIRECT_URI")
-		os.Unsetenv("WEBHOOK_SECRET")
+		os.Unsetenv("HIGHLEVEL_WEBHOOK_PUBLIC_KEY")
 	}()
 
 	cfg := Config{}
@@ -142,8 +145,8 @@ func TestLoadConfigEnvironmentOverrides(t *testing.T) {
 	if cfg.HighLevel.RedirectURI != "https://test.example.com/callback" {
 		t.Fatalf("RedirectURI = %s, want test URL", cfg.HighLevel.RedirectURI)
 	}
-	if cfg.Webhook.Secret != "test-webhook-secret" {
-		t.Fatalf("WebhookSecret = %s, want test-webhook-secret", cfg.Webhook.Secret)
+	if cfg.HighLevel.WebhookPublicKey != "test-webhook-public-key" {
+		t.Fatalf("WebhookPublicKey = %s, want test-webhook-public-key", cfg.HighLevel.WebhookPublicKey)
 	}
 }
 

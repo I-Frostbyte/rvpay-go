@@ -132,6 +132,42 @@ func (m *mockWebhookPlatformRepo) Delete(ctx context.Context, id uuid.UUID) erro
 	return nil
 }
 
+// mockWebhookEventRepo is a WebhookEventRepo test double
+type mockWebhookEventRepo struct {
+	events map[string]sqlc.WebhookEvent
+}
+
+func newMockWebhookEventRepo() *mockWebhookEventRepo {
+	return &mockWebhookEventRepo{
+		events: make(map[string]sqlc.WebhookEvent),
+	}
+}
+
+func (m *mockWebhookEventRepo) Create(ctx context.Context, integrationID uuid.UUID, providerEventID, eventType string, payload []byte) (sqlc.WebhookEvent, error) {
+	key := integrationID.String() + ":" + providerEventID
+	if _, ok := m.events[key]; ok {
+		return sqlc.WebhookEvent{}, repo.ErrDuplicate
+	}
+	event := sqlc.WebhookEvent{
+		ID:              uuid.New(),
+		IntegrationID:   integrationID,
+		ProviderEventID: providerEventID,
+		EventType:       eventType,
+		Payload:         payload,
+	}
+	m.events[key] = event
+	return event, nil
+}
+
+func (m *mockWebhookEventRepo) GetByIntegrationAndProvider(ctx context.Context, integrationID uuid.UUID, providerEventID string) (sqlc.WebhookEvent, error) {
+	key := integrationID.String() + ":" + providerEventID
+	event, ok := m.events[key]
+	if !ok {
+		return sqlc.WebhookEvent{}, repo.ErrNotFound
+	}
+	return event, nil
+}
+
 // mockWebhookRepo is a WebhookSubscriptionRepo test double
 type mockWebhookRepo struct {
 	subscriptions map[string]sqlc.WebhookSubscription
@@ -224,6 +260,7 @@ func TestProcessWebhookUnknownProvider(t *testing.T) {
 	svc := NewService(
 		newMockWebhookIntegrationRepo(),
 		newMockWebhookRepo(),
+		newMockWebhookEventRepo(),
 		newMockWebhookPlatformRepo(),
 		registry,
 		zerolog.Nop(),
@@ -244,6 +281,7 @@ func TestProcessWebhookInvalidSignature(t *testing.T) {
 	svc := NewService(
 		newMockWebhookIntegrationRepo(),
 		newMockWebhookRepo(),
+		newMockWebhookEventRepo(),
 		newMockWebhookPlatformRepo(),
 		registry,
 		zerolog.Nop(),
@@ -265,6 +303,7 @@ func TestRegisterWebhookIntegrationNotFound(t *testing.T) {
 	svc := NewService(
 		newMockWebhookIntegrationRepo(),
 		newMockWebhookRepo(),
+		newMockWebhookEventRepo(),
 		newMockWebhookPlatformRepo(),
 		registry,
 		zerolog.Nop(),
@@ -285,6 +324,7 @@ func TestUnregisterWebhookNotFound(t *testing.T) {
 	svc := NewService(
 		newMockWebhookIntegrationRepo(),
 		newMockWebhookRepo(),
+		newMockWebhookEventRepo(),
 		newMockWebhookPlatformRepo(),
 		registry,
 		zerolog.Nop(),

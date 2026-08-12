@@ -163,6 +163,17 @@ type Integration struct {
 	UpdatedAt         time.Time          `json:"updated_at"`
 }
 
+type OauthState struct {
+	ID         uuid.UUID          `json:"id"`
+	State      string             `json:"state"`
+	ClientID   uuid.UUID          `json:"client_id"`
+	PlatformID uuid.UUID          `json:"platform_id"`
+	ExpiresAt  time.Time          `json:"expires_at"`
+	ConsumedAt pgtype.Timestamptz `json:"consumed_at"`
+	CreatedAt  time.Time          `json:"created_at"`
+	UpdatedAt  time.Time          `json:"updated_at"`
+}
+
 type OauthToken struct {
 	ID            uuid.UUID `json:"id"`
 	IntegrationID uuid.UUID `json:"integration_id"`
@@ -194,6 +205,16 @@ type PlatformMetadatum struct {
 	MetadataValue string    `json:"metadata_value"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+type WebhookEvent struct {
+	ID              uuid.UUID `json:"id"`
+	IntegrationID   uuid.UUID `json:"integration_id"`
+	ProviderEventID string    `json:"provider_event_id"`
+	EventType       string    `json:"event_type"`
+	Payload         []byte    `json:"payload"`
+	ReceivedAt      time.Time `json:"received_at"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 type WebhookSubscription struct {

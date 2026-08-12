@@ -2,44 +2,64 @@ package providers
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
+	"crypto/ed25519"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"strings"
 )
 
 // HighLevelWebhookProvider implements WebhookProvider for HighLevel.
+//
+// HighLevel signs webhook deliveries with an Ed25519 signature carried in the
+// X-GHL-Signature header. The signature is computed over the exact raw request
+// body bytes, so verification MUST operate on the original body and never on a
+// re-marshaled or transformed JSON representation.
 type HighLevelWebhookProvider struct {
-	webhookSecret string
+	publicKey ed25519.PublicKey
 }
 
 // NewHighLevelWebhookProvider creates a new HighLevel webhook provider.
-func NewHighLevelWebhookProvider(webhookSecret string) *HighLevelWebhookProvider {
+// publicKeyPEM is the PEM-encoded Ed25519 public key (HIGHLEVEL_WEBHOOK_PUBLIC_KEY).
+func NewHighLevelWebhookProvider(publicKeyPEM string) *HighLevelWebhookProvider {
 	return &HighLevelWebhookProvider{
-		webhookSecret: webhookSecret,
+		publicKey: parseEd25519PublicKey(publicKeyPEM),
 	}
 }
 
+// VerifyRequest validates the X-GHL-Signature header against the raw body
+// using the configured Ed25519 public key. It rejects missing, malformed, and
+// invalid signatures. The body passed in MUST be the exact raw request body.
 func (p *HighLevelWebhookProvider) VerifyRequest(ctx context.Context, headers map[string]string, body []byte) error {
-	signature := headers["X-HighLevel-Signature"]
+	if p.publicKey == nil {
+		return fmt.Errorf("webhook public key is not configured")
+	}
+
+	signature := headers["X-GHL-Signature"]
 	if signature == "" {
 		return fmt.Errorf("missing signature header")
 	}
 
-	timestamp := headers["X-HighLevel-Timestamp"]
-	if timestamp == "" {
-		return fmt.Errorf("missing timestamp header")
+	// GHL encodes the Ed25519 signature as base64 (standard alphabet).
+	sig, err := base64.StdEncoding.DecodeString(signature)
+	if err != nil {
+		return fmt.Errorf("malformed signature: %w", err)
 	}
 
-	expectedSignature := p.computeSignature(timestamp, body)
-	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
+	if len(sig) != ed25519.SignatureSize {
+		return fmt.Errorf("malformed signature: unexpected length %d", len(sig))
+	}
+
+	if !ed25519.Verify(p.publicKey, body, sig) {
 		return fmt.Errorf("invalid signature")
 	}
 
 	return nil
 }
 
+// ParseEvent converts a provider payload into a normalized WebhookEvent.
 func (p *HighLevelWebhookProvider) ParseEvent(ctx context.Context, body []byte) (*WebhookEvent, error) {
 	var payload struct {
 		EventID       string                 `json:"eventId"`
@@ -79,49 +99,68 @@ func (p *HighLevelWebhookProvider) UnregisterWebhook(ctx context.Context, integr
 	return nil
 }
 
-func (p *HighLevelWebhookProvider) computeSignature(timestamp string, body []byte) string {
-	data := timestamp + string(body)
-	h := hmac.New(sha256.New, []byte(p.webhookSecret))
-	h.Write([]byte(data))
-	return hex.EncodeToString(h.Sum(nil))
+// parseEd25519PublicKey parses a PEM-encoded Ed25519 public key. It returns
+// nil when the key is empty or malformed so that verification fails closed.
+func parseEd25519PublicKey(publicKeyPEM string) ed25519.PublicKey {
+	trimmed := strings.TrimSpace(publicKeyPEM)
+	if trimmed == "" {
+		return nil
+	}
+
+	block, _ := pem.Decode([]byte(trimmed))
+	if block == nil {
+		return nil
+	}
+
+	key, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil
+	}
+
+	edKey, ok := key.(ed25519.PublicKey)
+	if !ok {
+		return nil
+	}
+
+	return edKey
 }
 
 // HighLevelWebhookValidator implements WebhookValidator for HighLevel.
 type HighLevelWebhookValidator struct {
-	secret string
+	publicKey ed25519.PublicKey
 }
 
 // NewHighLevelWebhookValidator creates a new HighLevel webhook validator.
-func NewHighLevelWebhookValidator(secret string) *HighLevelWebhookValidator {
+func NewHighLevelWebhookValidator(publicKeyPEM string) *HighLevelWebhookValidator {
 	return &HighLevelWebhookValidator{
-		secret: secret,
+		publicKey: parseEd25519PublicKey(publicKeyPEM),
 	}
 }
 
 func (v *HighLevelWebhookValidator) ValidateSignature(secret string, headers map[string]string, body []byte) error {
-	signature := headers["X-HighLevel-Signature"]
+	if v.publicKey == nil {
+		return fmt.Errorf("webhook public key is not configured")
+	}
+
+	signature := headers["X-GHL-Signature"]
 	if signature == "" {
 		return fmt.Errorf("missing signature header")
 	}
 
-	timestamp := headers["X-HighLevel-Timestamp"]
-	if timestamp == "" {
-		return fmt.Errorf("missing timestamp header")
+	sig, err := base64.StdEncoding.DecodeString(signature)
+	if err != nil {
+		return fmt.Errorf("malformed signature: %w", err)
 	}
 
-	expectedSignature := v.computeSignature(timestamp, body)
-	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
+	if len(sig) != ed25519.SignatureSize {
+		return fmt.Errorf("malformed signature: unexpected length %d", len(sig))
+	}
+
+	if !ed25519.Verify(v.publicKey, body, sig) {
 		return fmt.Errorf("invalid signature")
 	}
 
 	return nil
-}
-
-func (v *HighLevelWebhookValidator) computeSignature(timestamp string, body []byte) string {
-	data := timestamp + string(body)
-	h := hmac.New(sha256.New, []byte(v.secret))
-	h.Write([]byte(data))
-	return hex.EncodeToString(h.Sum(nil))
 }
 
 // HighLevelWebhookDispatcher implements WebhookDispatcher for HighLevel.
