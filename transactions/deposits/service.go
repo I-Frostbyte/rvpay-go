@@ -119,6 +119,35 @@ func (s *Impl) InitiateDeposit(ctx context.Context, req *transactionsgrpc.Create
 	}, nil
 }
 
+// GetDepositByGHLTransactionID fetches a deposit by its GoHighLevel
+// transaction identifier. This is used by the GHL Custom Payment Provider
+// query endpoint to correlate a HighLevel transaction with an RVPay deposit.
+func (s *Impl) GetDepositByGHLTransactionID(ctx context.Context, req *transactionsgrpc.GetDepositByGHLTransactionIDRequest) (*transactionsgrpc.GetDepositByGHLTransactionIDResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "deposit request is required")
+	}
+
+	ghlTransactionID := strings.TrimSpace(req.GetGhlTransactionId())
+	if ghlTransactionID == "" {
+		return nil, status.Error(codes.InvalidArgument, "ghl_transaction_id is required")
+	}
+
+	deposit, err := s.depositRepo.GetByGHLTransactionID(ctx, ghlTransactionID)
+	if err != nil {
+		switch {
+		case errors.Is(err, repo.ErrNotFound):
+			return nil, status.Error(codes.NotFound, "deposit not found")
+		default:
+			s.logger.Error().Err(err).Str("ghl_transaction_id", ghlTransactionID).Msg("could not get deposit by GHL transaction id")
+			return nil, status.Error(codes.Internal, "could not get deposit")
+		}
+	}
+
+	return &transactionsgrpc.GetDepositByGHLTransactionIDResponse{
+		Deposit: depositToProto(deposit),
+	}, nil
+}
+
 // GetDeposit fetches a deposit by id.
 func (s *Impl) GetDeposit(ctx context.Context, req *transactionsgrpc.GetDepositRequest) (*transactionsgrpc.GetDepositResponse, error) {
 	if req == nil {

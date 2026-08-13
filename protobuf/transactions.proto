@@ -272,6 +272,20 @@ message GetDepositResponse {
   Deposit deposit = 1;
 }
 
+// GetDepositByGHLTransactionIDRequest fetches a deposit by its GoHighLevel
+// transaction identifier. This is used by the GHL Custom Payment Provider
+// query endpoint to correlate a HighLevel transaction with an RVPay deposit.
+message GetDepositByGHLTransactionIDRequest {
+  // ghl_transaction_id is the GoHighLevel transaction identifier.
+  string ghl_transaction_id = 1;
+}
+
+// GetDepositByGHLTransactionIDResponse returns the requested deposit.
+message GetDepositByGHLTransactionIDResponse {
+  // deposit is the requested deposit.
+  Deposit deposit = 1;
+}
+
 // CreatePayoutRequest requests a payout.
 message CreatePayoutRequest {
   // client_id references the RVPay client record.
@@ -357,6 +371,14 @@ service DepositService {
   rpc GetDeposit(GetDepositRequest) returns (GetDepositResponse) {
     option (google.api.http) = {
       get : "/v1/public/deposits/{deposit_id}"
+    };
+  }
+  // GetDepositByGHLTransactionID fetches a deposit by its GoHighLevel
+  // transaction identifier. This is used by the GHL Custom Payment Provider
+  // query endpoint to correlate a HighLevel transaction with an RVPay deposit.
+  rpc GetDepositByGHLTransactionID(GetDepositByGHLTransactionIDRequest) returns (GetDepositByGHLTransactionIDResponse) {
+    option (google.api.http) = {
+      get : "/v1/public/deposits/by-ghl-transaction/{ghl_transaction_id}"
     };
   }
 }

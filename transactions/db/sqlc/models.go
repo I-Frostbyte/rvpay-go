@@ -300,6 +300,8 @@ type Deposit struct {
 	FailureReason     string             `json:"failure_reason"`
 	CreatedAt         time.Time          `json:"created_at"`
 	UpdatedAt         time.Time          `json:"updated_at"`
+	GhlTransactionID  string             `json:"ghl_transaction_id"`
+	GhlChargeID       string             `json:"ghl_charge_id"`
 }
 
 type Merchant struct {

@@ -356,6 +356,36 @@ func (mr *MockDepositRepoMockRecorder) GetByExternalReference(ctx, externalRefer
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByExternalReference", reflect.TypeOf((*MockDepositRepo)(nil).GetByExternalReference), ctx, externalReference)
 }
 
+// GetByGHLChargeID mocks base method.
+func (m *MockDepositRepo) GetByGHLChargeID(ctx context.Context, ghlChargeID string) (sqlc.Deposit, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByGHLChargeID", ctx, ghlChargeID)
+	ret0, _ := ret[0].(sqlc.Deposit)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByGHLChargeID indicates an expected call of GetByGHLChargeID.
+func (mr *MockDepositRepoMockRecorder) GetByGHLChargeID(ctx, ghlChargeID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByGHLChargeID", reflect.TypeOf((*MockDepositRepo)(nil).GetByGHLChargeID), ctx, ghlChargeID)
+}
+
+// GetByGHLTransactionID mocks base method.
+func (m *MockDepositRepo) GetByGHLTransactionID(ctx context.Context, ghlTransactionID string) (sqlc.Deposit, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByGHLTransactionID", ctx, ghlTransactionID)
+	ret0, _ := ret[0].(sqlc.Deposit)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByGHLTransactionID indicates an expected call of GetByGHLTransactionID.
+func (mr *MockDepositRepoMockRecorder) GetByGHLTransactionID(ctx, ghlTransactionID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByGHLTransactionID", reflect.TypeOf((*MockDepositRepo)(nil).GetByGHLTransactionID), ctx, ghlTransactionID)
+}
+
 // GetByID mocks base method.
 func (m *MockDepositRepo) GetByID(ctx context.Context, id uuid.UUID) (sqlc.Deposit, error) {
 	m.ctrl.T.Helper()
@@ -474,6 +504,21 @@ func (m *MockDepositRepo) MarkFailed(ctx context.Context, id uuid.UUID, status s
 func (mr *MockDepositRepoMockRecorder) MarkFailed(ctx, id, status, failureReason any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkFailed", reflect.TypeOf((*MockDepositRepo)(nil).MarkFailed), ctx, id, status, failureReason)
+}
+
+// UpdateGHLReference mocks base method.
+func (m *MockDepositRepo) UpdateGHLReference(ctx context.Context, id uuid.UUID, ghlTransactionID, ghlChargeID string) (sqlc.Deposit, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateGHLReference", ctx, id, ghlTransactionID, ghlChargeID)
+	ret0, _ := ret[0].(sqlc.Deposit)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateGHLReference indicates an expected call of UpdateGHLReference.
+func (mr *MockDepositRepoMockRecorder) UpdateGHLReference(ctx, id, ghlTransactionID, ghlChargeID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateGHLReference", reflect.TypeOf((*MockDepositRepo)(nil).UpdateGHLReference), ctx, id, ghlTransactionID, ghlChargeID)
 }
 
 // UpdateStatus mocks base method.

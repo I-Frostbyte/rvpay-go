@@ -415,6 +415,12 @@ variables in its README and `.env.example`. The common set:
 | `HIGHLEVEL_SSO_KEY` | integrations | HighLevel webhook verification key (secret) | integrations |
 | `WEBHOOK_SECRET` | clients | Client webhook verification secret (secret) | clients |
 | `TOKEN_ENCRYPTION_KEY` | integrations | 32-byte AES-256 key for token encryption (secret) | integrations |
+| `HIGHLEVEL_PAYMENT_URL` | clients | GHL Custom Payment Provider frontend checkout URL (`paymentsUrl`) | no |
+| `HIGHLEVEL_QUERY_URL` | clients | GHL Custom Payment Provider backend query URL (`queryUrl`) | no |
+| `HIGHLEVEL_PROVIDER_NAME` | clients | GHL Custom Payment Provider display name | no |
+| `HIGHLEVEL_PROVIDER_DESCRIPTION` | clients | GHL Custom Payment Provider description | no |
+| `HIGHLEVEL_PROVIDER_IMAGE_URL` | clients | GHL Custom Payment Provider image URL | no |
+| `TRANSACTIONS_GRPC_ADDR` | clients | Transactions service gRPC address used by the GHL Custom Payment Provider query/webhook endpoints | no |
 
 Secrets are placeholders only in this repository; real values are supplied via
 environment (`.env`, Render dashboard, or CI secrets). See each service README

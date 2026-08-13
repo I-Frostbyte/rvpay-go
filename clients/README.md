@@ -102,6 +102,12 @@ cp .env.example .env
 | `HIGHLEVEL_CLIENT_SECRET` | Yes | HighLevel OAuth client secret |
 | `HIGHLEVEL_REDIRECT_URI` | Yes | Publicly reachable OAuth callback URL, e.g. `https://<render-client-host>/oauth/callback` |
 | `HIGHLEVEL_WEBHOOK_PUBLIC_KEY` | Yes | PEM-encoded Ed25519 public key used to verify `X-GHL-Signature` webhook signatures. This is PUBLIC cryptographic material, not a private secret. |
+| `HIGHLEVEL_PAYMENT_URL` | No | Frontend checkout URL supplied to HighLevel as the payment provider's `paymentsUrl`. Configuration, never hard-coded. |
+| `HIGHLEVEL_QUERY_URL` | No | Backend query URL supplied to HighLevel as the payment provider's `queryUrl`. Configuration, never hard-coded. |
+| `HIGHLEVEL_PROVIDER_NAME` | No; defaults to `RVPay` | Display name of the payment provider. |
+| `HIGHLEVEL_PROVIDER_DESCRIPTION` | No; defaults to `RVPay payment provider` | Description of the payment provider. |
+| `HIGHLEVEL_PROVIDER_IMAGE_URL` | No | Image URL of the payment provider. |
+| `TRANSACTIONS_GRPC_ADDR` | No; defaults to `localhost:50052` | gRPC address of the Transactions service, used by the GHL Custom Payment Provider query/webhook endpoints to correlate HighLevel transactions with RVPay deposits. |
 
 ## Local startup
 
@@ -244,6 +250,54 @@ Configure the GHL Marketplace app with:
 
 The Render hostname is supplied through deployment configuration
 (`HIGHLEVEL_REDIRECT_URI`); it is never hard-coded.
+
+### GHL Custom Payment Provider
+
+The Clients service also implements the backend half of the GHL Custom
+Payment Provider contract. It exposes two additional direct HTTP endpoints
+(distinct from the Marketplace OAuth callback and webhook):
+
+| Route | Method | Purpose |
+| --- | --- | --- |
+| `/payments/custom-provider/query` | POST | GHL payment query operations (`type=verify`) |
+| `/payments/custom-provider/webhook` | POST | GHL payment-provider webhook events (`payment.captured`) |
+
+#### Payment query flow
+
+1. GHL POSTs to `/payments/custom-provider/query` with a JSON body containing
+   `type`, `transactionId`, `apiKey`, `chargeId`, and `subscriptionId`.
+2. The handler validates the provider API key against the stored
+   `payment_provider_configs` record (constant-time comparison; the key is
+   never logged).
+3. For `type=verify`, the handler correlates the HighLevel transaction with an
+   RVPay deposit by calling the Transactions service
+   (`GetDepositByGHLTransactionID` gRPC RPC).
+4. The response follows the HighLevel contract: `{"success":true}` for
+   completed, `{"failed":true}` for failed, and `{"success":false}` for
+   pending. Internal RVPay transaction objects are never returned.
+
+#### Payment webhook flow
+
+1. GHL POSTs to `/payments/custom-provider/webhook` with a payment event
+   payload (e.g. `payment.captured`).
+2. The handler resolves the integration by `locationId` via the
+   `payment_provider_configs` table.
+3. The event is recorded in the `webhook_events` table. The unique constraint
+   on `(integration_id, provider_event_id)` plus `ON CONFLICT DO NOTHING`
+   makes duplicate deliveries race-safe and idempotent; duplicates are
+   acknowledged with HTTP 200 so the provider stops retrying.
+4. Only `payment.captured` is processed (one-time payment flow). Unknown event
+   types (e.g. subscription events) are acknowledged safely without
+   processing.
+
+#### Provider configuration
+
+The `payment_provider_configs` table stores per-integration GHL payment
+provider configuration: `provider_name`, `provider_description`,
+`provider_image_url`, `location_id`, `query_url`, `payments_url`,
+`supports_subscription_schedule` (always `false` for one-time payments), and
+`provider_api_key`. The provider API key is distinct from the OAuth client
+secret and the pawaPay API key.
 
 ## Current behavior and limitations
 

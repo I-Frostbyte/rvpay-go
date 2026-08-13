@@ -11,3 +11,4 @@ package db
 //go:generate go run go.uber.org/mock/mockgen@v0.6.0 -destination repo/mocks/webhook_subscription_repo.go -package mocks ./repo WebhookSubscriptionRepo
 //go:generate go run go.uber.org/mock/mockgen@v0.6.0 -destination repo/mocks/oauth_state_repo.go -package mocks ./repo OAuthStateRepo
 //go:generate go run go.uber.org/mock/mockgen@v0.6.0 -destination repo/mocks/webhook_event_repo.go -package mocks ./repo WebhookEventRepo
+//go:generate go run go.uber.org/mock/mockgen@v0.6.0 -destination repo/mocks/payment_provider_config_repo.go -package mocks ./repo PaymentProviderConfigRepo

@@ -34,6 +34,23 @@ type HighLevelConfig struct {
 	// HighLevel webhook signatures (HIGHLEVEL_WEBHOOK_PUBLIC_KEY). It is
 	// public cryptographic material, not a private credential.
 	WebhookPublicKey string
+	// PaymentURL is the frontend checkout URL supplied to HighLevel as the
+	// payment provider's paymentsUrl (HIGHLEVEL_PAYMENT_URL). It is
+	// configuration, never hard-coded.
+	PaymentURL string
+	// QueryURL is the backend query URL supplied to HighLevel as the payment
+	// provider's queryUrl (HIGHLEVEL_QUERY_URL). It is configuration, never
+	// hard-coded.
+	QueryURL string
+	// ProviderName is the display name of the payment provider
+	// (HIGHLEVEL_PROVIDER_NAME).
+	ProviderName string
+	// ProviderDescription is the description of the payment provider
+	// (HIGHLEVEL_PROVIDER_DESCRIPTION).
+	ProviderDescription string
+	// ProviderImageURL is the image URL of the payment provider
+	// (HIGHLEVEL_PROVIDER_IMAGE_URL).
+	ProviderImageURL string
 }
 
 // LoadConfig loads configuration from environment variables.
@@ -54,6 +71,11 @@ func (c *Config) LoadConfig() error {
 	c.HighLevel.ClientSecret = getEnv("HIGHLEVEL_CLIENT_SECRET", "")
 	c.HighLevel.RedirectURI = getEnv("HIGHLEVEL_REDIRECT_URI", "")
 	c.HighLevel.WebhookPublicKey = getEnv("HIGHLEVEL_WEBHOOK_PUBLIC_KEY", "")
+	c.HighLevel.PaymentURL = getEnv("HIGHLEVEL_PAYMENT_URL", "")
+	c.HighLevel.QueryURL = getEnv("HIGHLEVEL_QUERY_URL", "")
+	c.HighLevel.ProviderName = getEnv("HIGHLEVEL_PROVIDER_NAME", "RVPay")
+	c.HighLevel.ProviderDescription = getEnv("HIGHLEVEL_PROVIDER_DESCRIPTION", "RVPay payment provider")
+	c.HighLevel.ProviderImageURL = getEnv("HIGHLEVEL_PROVIDER_IMAGE_URL", "")
 
 	return nil
 }

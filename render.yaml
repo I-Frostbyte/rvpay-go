@@ -53,6 +53,18 @@ services:
         sync: false
       - key: HIGHLEVEL_WEBHOOK_PUBLIC_KEY
         sync: false
+      - key: HIGHLEVEL_PAYMENT_URL
+        sync: false
+      - key: HIGHLEVEL_QUERY_URL
+        sync: false
+      - key: HIGHLEVEL_PROVIDER_NAME
+        sync: false
+      - key: HIGHLEVEL_PROVIDER_DESCRIPTION
+        sync: false
+      - key: HIGHLEVEL_PROVIDER_IMAGE_URL
+        sync: false
+      - key: TRANSACTIONS_GRPC_ADDR
+        sync: false
 
   - type: web
     name: rvpay-transactions

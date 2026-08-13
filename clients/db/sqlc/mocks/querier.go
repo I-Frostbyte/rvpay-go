@@ -192,6 +192,21 @@ func (mr *MockQuerierMockRecorder) CreateOAuthToken(ctx, arg any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOAuthToken", reflect.TypeOf((*MockQuerier)(nil).CreateOAuthToken), ctx, arg)
 }
 
+// CreatePaymentProviderConfig mocks base method.
+func (m *MockQuerier) CreatePaymentProviderConfig(ctx context.Context, arg sqlc.CreatePaymentProviderConfigParams) (sqlc.PaymentProviderConfig, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePaymentProviderConfig", ctx, arg)
+	ret0, _ := ret[0].(sqlc.PaymentProviderConfig)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreatePaymentProviderConfig indicates an expected call of CreatePaymentProviderConfig.
+func (mr *MockQuerierMockRecorder) CreatePaymentProviderConfig(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePaymentProviderConfig", reflect.TypeOf((*MockQuerier)(nil).CreatePaymentProviderConfig), ctx, arg)
+}
+
 // CreatePlatform mocks base method.
 func (m *MockQuerier) CreatePlatform(ctx context.Context, arg sqlc.CreatePlatformParams) (sqlc.Platform, error) {
 	m.ctrl.T.Helper()
@@ -310,6 +325,21 @@ func (m *MockQuerier) DeleteOAuthTokenByIntegrationID(ctx context.Context, integ
 func (mr *MockQuerierMockRecorder) DeleteOAuthTokenByIntegrationID(ctx, integrationID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOAuthTokenByIntegrationID", reflect.TypeOf((*MockQuerier)(nil).DeleteOAuthTokenByIntegrationID), ctx, integrationID)
+}
+
+// DeletePaymentProviderConfig mocks base method.
+func (m *MockQuerier) DeletePaymentProviderConfig(ctx context.Context, integrationID uuid.UUID) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePaymentProviderConfig", ctx, integrationID)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeletePaymentProviderConfig indicates an expected call of DeletePaymentProviderConfig.
+func (mr *MockQuerierMockRecorder) DeletePaymentProviderConfig(ctx, integrationID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePaymentProviderConfig", reflect.TypeOf((*MockQuerier)(nil).DeletePaymentProviderConfig), ctx, integrationID)
 }
 
 // DeletePlatform mocks base method.
@@ -460,6 +490,51 @@ func (m *MockQuerier) GetOAuthTokenByIntegrationID(ctx context.Context, integrat
 func (mr *MockQuerierMockRecorder) GetOAuthTokenByIntegrationID(ctx, integrationID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOAuthTokenByIntegrationID", reflect.TypeOf((*MockQuerier)(nil).GetOAuthTokenByIntegrationID), ctx, integrationID)
+}
+
+// GetPaymentProviderConfigByAPIKey mocks base method.
+func (m *MockQuerier) GetPaymentProviderConfigByAPIKey(ctx context.Context, providerApiKey string) (sqlc.PaymentProviderConfig, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPaymentProviderConfigByAPIKey", ctx, providerApiKey)
+	ret0, _ := ret[0].(sqlc.PaymentProviderConfig)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPaymentProviderConfigByAPIKey indicates an expected call of GetPaymentProviderConfigByAPIKey.
+func (mr *MockQuerierMockRecorder) GetPaymentProviderConfigByAPIKey(ctx, providerApiKey any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPaymentProviderConfigByAPIKey", reflect.TypeOf((*MockQuerier)(nil).GetPaymentProviderConfigByAPIKey), ctx, providerApiKey)
+}
+
+// GetPaymentProviderConfigByIntegrationID mocks base method.
+func (m *MockQuerier) GetPaymentProviderConfigByIntegrationID(ctx context.Context, integrationID uuid.UUID) (sqlc.PaymentProviderConfig, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPaymentProviderConfigByIntegrationID", ctx, integrationID)
+	ret0, _ := ret[0].(sqlc.PaymentProviderConfig)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPaymentProviderConfigByIntegrationID indicates an expected call of GetPaymentProviderConfigByIntegrationID.
+func (mr *MockQuerierMockRecorder) GetPaymentProviderConfigByIntegrationID(ctx, integrationID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPaymentProviderConfigByIntegrationID", reflect.TypeOf((*MockQuerier)(nil).GetPaymentProviderConfigByIntegrationID), ctx, integrationID)
+}
+
+// GetPaymentProviderConfigByLocationID mocks base method.
+func (m *MockQuerier) GetPaymentProviderConfigByLocationID(ctx context.Context, locationID string) (sqlc.PaymentProviderConfig, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPaymentProviderConfigByLocationID", ctx, locationID)
+	ret0, _ := ret[0].(sqlc.PaymentProviderConfig)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPaymentProviderConfigByLocationID indicates an expected call of GetPaymentProviderConfigByLocationID.
+func (mr *MockQuerierMockRecorder) GetPaymentProviderConfigByLocationID(ctx, locationID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPaymentProviderConfigByLocationID", reflect.TypeOf((*MockQuerier)(nil).GetPaymentProviderConfigByLocationID), ctx, locationID)
 }
 
 // GetPlatformByID mocks base method.
@@ -790,6 +865,21 @@ func (m *MockQuerier) UpdateOAuthToken(ctx context.Context, arg sqlc.UpdateOAuth
 func (mr *MockQuerierMockRecorder) UpdateOAuthToken(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateOAuthToken", reflect.TypeOf((*MockQuerier)(nil).UpdateOAuthToken), ctx, arg)
+}
+
+// UpdatePaymentProviderConfig mocks base method.
+func (m *MockQuerier) UpdatePaymentProviderConfig(ctx context.Context, arg sqlc.UpdatePaymentProviderConfigParams) (sqlc.PaymentProviderConfig, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePaymentProviderConfig", ctx, arg)
+	ret0, _ := ret[0].(sqlc.PaymentProviderConfig)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePaymentProviderConfig indicates an expected call of UpdatePaymentProviderConfig.
+func (mr *MockQuerierMockRecorder) UpdatePaymentProviderConfig(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePaymentProviderConfig", reflect.TypeOf((*MockQuerier)(nil).UpdatePaymentProviderConfig), ctx, arg)
 }
 
 // UpdatePlatform mocks base method.
