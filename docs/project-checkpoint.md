@@ -87,6 +87,13 @@ shared platform infrastructure. The cumulative implementation through Platform
   exists and is wired only in the legacy Deposits service.
 - **OAuth / Webhooks** — IMPLEMENTED in Clients (HighLevel OAuth + webhooks)
   and legacy Integrations.
+- **GHL Custom Payment Provider** — IMPLEMENTED in Clients: payment query
+  endpoint (`POST /payments/custom-provider/query`, verify operation),
+  payment-provider webhook (`POST /payments/custom-provider/webhook`,
+  payment.captured, idempotent), per-integration provider configuration
+  (`payment_provider_configs` table), and transaction correlation with RVPay
+  deposits via the Transactions service (`GetDepositByGHLTransactionID` RPC).
+  One-time payments only; no subscriptions or refunds.
 - **Background processing / queues** — PLANNED/NOT PRESENT. No workers, no
   polling, no reconciliation jobs exist.
 
@@ -174,6 +181,7 @@ shared platform infrastructure. The cumulative implementation through Platform
 | Platform | 10 Security | COMPLETE | `docs/platform-security-review.md` |
 | Platform | 11 Performance | COMPLETE | `docs/platform-performance-review.md` |
 | Platform | 12 Final Review | COMPLETE | `docs/platform-final-review.md`; platform sequence finished |
+| Clients | 00 GHL Custom Payment Provider | COMPLETE | GHL Custom Payment Provider backend integration (query endpoint, payment webhook, provider config, transaction correlation) |
 
 ## Current Work
 

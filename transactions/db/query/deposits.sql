@@ -20,6 +20,12 @@ SELECT * FROM deposits WHERE id = $1;
 -- name: GetDepositByExternalReference :one
 SELECT * FROM deposits WHERE external_reference = $1;
 
+-- name: GetDepositByGHLTransactionID :one
+SELECT * FROM deposits WHERE ghl_transaction_id = $1;
+
+-- name: GetDepositByGHLChargeID :one
+SELECT * FROM deposits WHERE ghl_charge_id = $1;
+
 -- name: GetDepositByIdempotencyKey :one
 SELECT * FROM deposits WHERE idempotency_key = $1;
 
@@ -63,6 +69,14 @@ UPDATE deposits
 SET status = $2,
     failed_at = NOW(),
     failure_reason = $3,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
+-- name: UpdateDepositGHLReference :one
+UPDATE deposits
+SET ghl_transaction_id = $2,
+    ghl_charge_id = $3,
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;

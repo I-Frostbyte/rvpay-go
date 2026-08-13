@@ -13,6 +13,8 @@ type DepositRepo interface {
 	Create(ctx context.Context, clientID, customerID, merchantID uuid.UUID, amount pgtype.Numeric, currency string, paymentType sqlc.PaymentType, payerPhoneNumber string, provider sqlc.PaymentProvider, status sqlc.DepositStatus, idempotencyKey uuid.UUID) (sqlc.Deposit, error)
 	GetByID(ctx context.Context, id uuid.UUID) (sqlc.Deposit, error)
 	GetByExternalReference(ctx context.Context, externalReference string) (sqlc.Deposit, error)
+	GetByGHLTransactionID(ctx context.Context, ghlTransactionID string) (sqlc.Deposit, error)
+	GetByGHLChargeID(ctx context.Context, ghlChargeID string) (sqlc.Deposit, error)
 	GetByIdempotencyKey(ctx context.Context, idempotencyKey uuid.UUID) (sqlc.Deposit, error)
 	ListByClient(ctx context.Context, clientID uuid.UUID) ([]sqlc.Deposit, error)
 	ListByCustomer(ctx context.Context, customerID uuid.UUID) ([]sqlc.Deposit, error)
@@ -21,6 +23,7 @@ type DepositRepo interface {
 	UpdateStatus(ctx context.Context, id uuid.UUID, status sqlc.DepositStatus) (sqlc.Deposit, error)
 	MarkCompleted(ctx context.Context, id uuid.UUID, status sqlc.DepositStatus) (sqlc.Deposit, error)
 	MarkFailed(ctx context.Context, id uuid.UUID, status sqlc.DepositStatus, failureReason string) (sqlc.Deposit, error)
+	UpdateGHLReference(ctx context.Context, id uuid.UUID, ghlTransactionID, ghlChargeID string) (sqlc.Deposit, error)
 }
 
 type depositRepo struct {
@@ -61,6 +64,22 @@ func (r *depositRepo) GetByID(ctx context.Context, id uuid.UUID) (sqlc.Deposit, 
 
 func (r *depositRepo) GetByExternalReference(ctx context.Context, externalReference string) (sqlc.Deposit, error) {
 	deposit, err := r.q.GetDepositByExternalReference(ctx, externalReference)
+	if err != nil {
+		return sqlc.Deposit{}, wrapNotFound(err)
+	}
+	return deposit, nil
+}
+
+func (r *depositRepo) GetByGHLTransactionID(ctx context.Context, ghlTransactionID string) (sqlc.Deposit, error) {
+	deposit, err := r.q.GetDepositByGHLTransactionID(ctx, ghlTransactionID)
+	if err != nil {
+		return sqlc.Deposit{}, wrapNotFound(err)
+	}
+	return deposit, nil
+}
+
+func (r *depositRepo) GetByGHLChargeID(ctx context.Context, ghlChargeID string) (sqlc.Deposit, error) {
+	deposit, err := r.q.GetDepositByGHLChargeID(ctx, ghlChargeID)
 	if err != nil {
 		return sqlc.Deposit{}, wrapNotFound(err)
 	}
@@ -134,6 +153,18 @@ func (r *depositRepo) MarkFailed(ctx context.Context, id uuid.UUID, status sqlc.
 		ID:            id,
 		Status:        status,
 		FailureReason: failureReason,
+	})
+	if err != nil {
+		return sqlc.Deposit{}, wrapNotFound(err)
+	}
+	return deposit, nil
+}
+
+func (r *depositRepo) UpdateGHLReference(ctx context.Context, id uuid.UUID, ghlTransactionID, ghlChargeID string) (sqlc.Deposit, error) {
+	deposit, err := r.q.UpdateDepositGHLReference(ctx, sqlc.UpdateDepositGHLReferenceParams{
+		ID:               id,
+		GhlTransactionID: ghlTransactionID,
+		GhlChargeID:      ghlChargeID,
 	})
 	if err != nil {
 		return sqlc.Deposit{}, wrapNotFound(err)

@@ -16,10 +16,12 @@ import (
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
 	clientshttp "github.com/I-Frostbyte/rvpay-go/clients/http"
 	"github.com/I-Frostbyte/rvpay-go/clients/oauth"
+	"github.com/I-Frostbyte/rvpay-go/clients/payments"
 	"github.com/I-Frostbyte/rvpay-go/clients/providers"
 	"github.com/I-Frostbyte/rvpay-go/clients/service"
 	"github.com/I-Frostbyte/rvpay-go/clients/webhooks"
 	clientsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/clientsgrpc"
+	transactionsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpc"
 	commondatabase "github.com/I-Frostbyte/rvpay-go/shared/database"
 	commonlogger "github.com/I-Frostbyte/rvpay-go/shared/logger"
 	commonobservability "github.com/I-Frostbyte/rvpay-go/shared/observability"
@@ -27,6 +29,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
@@ -92,6 +95,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	webhookSubscriptionRepo := repo.NewWebhookSubscriptionRepo(clientsRepo.Do())
 	oauthStateRepo := repo.NewOAuthStateRepo(clientsRepo.Do())
 	webhookEventRepo := repo.NewWebhookEventRepo(clientsRepo.Do())
+	paymentProviderConfigRepo := repo.NewPaymentProviderConfigRepo(clientsRepo.Do())
 
 	providerRegistry := providers.NewProviderRegistry()
 	highLevelProvider := providers.NewHighLevelProvider(cfg.HighLevel.ClientID, cfg.HighLevel.ClientSecret, cfg.HighLevel.RedirectURI, cfg.HighLevel.WebhookPublicKey)
@@ -106,6 +110,26 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	webhookService := webhooks.NewService(integrationRepo, webhookSubscriptionRepo, webhookEventRepo, platformRepo, providerRegistry, logger)
 	oauthHandler := clientshttp.NewOAuthHandler(oauthService, logger)
 	webhookHandler := clientshttp.NewWebhookHandler(webhookService, logger)
+
+	// GHL Custom Payment Provider integration. The Clients service owns the
+	// GHL-facing payment query and webhook endpoints; it correlates HighLevel
+	// transactions with RVPay deposits by calling the Transactions service via
+	// gRPC. The Transactions gRPC address comes from configuration
+	// (TRANSACTIONS_GRPC_ADDR); it is never hard-coded.
+	transactionsAddr := os.Getenv("TRANSACTIONS_GRPC_ADDR")
+	if transactionsAddr == "" {
+		transactionsAddr = "localhost:50052"
+	}
+	transactionsConn, err := grpc.NewClient(transactionsAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return fmt.Errorf("connect to transactions service: %w", err)
+	}
+	defer transactionsConn.Close()
+	transactionsClient := transactionsgrpc.NewDepositServiceClient(transactionsConn)
+
+	paymentService := payments.NewService(paymentProviderConfigRepo, integrationRepo, webhookEventRepo, transactionsClient, logger)
+	paymentQueryHandler := clientshttp.NewPaymentQueryHandler(paymentService, logger)
+	paymentWebhookHandler := clientshttp.NewPaymentWebhookHandler(paymentService, logger)
 
 	svrOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(
@@ -164,6 +188,11 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	// project's protobuf transport strategy.
 	httpMux.HandleFunc("/oauth/callback", oauthHandler.Callback)
 	httpMux.HandleFunc("/webhooks/highlevel", webhookHandler.HighLevel)
+	// GHL Custom Payment Provider endpoints. These are distinct from the
+	// Marketplace OAuth callback and webhook; they handle payment query
+	// operations and payment-provider webhook events.
+	httpMux.HandleFunc("/payments/custom-provider/query", paymentQueryHandler.Query)
+	httpMux.HandleFunc("/payments/custom-provider/webhook", paymentWebhookHandler.Payment)
 
 	httpPort := os.Getenv("PORT")
 	if httpPort == "" {

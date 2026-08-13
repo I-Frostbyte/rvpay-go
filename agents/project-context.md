@@ -221,6 +221,19 @@ entity is shared across services.
 - Config: `LOG_LEVEL`, `LISTEN_PORT`, `MIGRATION_PATH`, `RUN_MIGRATIONS`,
   `DB_*`, and HighLevel/webhook secrets (`HIGHLEVEL_CLIENT_ID`,
   `HIGHLEVEL_CLIENT_SECRET`, `HIGHLEVEL_REDIRECT_URI`, `WEBHOOK_SECRET`).
+- GHL Custom Payment Provider: the Clients service implements the backend half
+  of the GHL Custom Payment Provider contract. It exposes
+  `POST /payments/custom-provider/query` (verify operation) and
+  `POST /payments/custom-provider/webhook` (payment.captured) as direct HTTP
+  handlers. It correlates HighLevel transactions with RVPay deposits by calling
+  the Transactions service via gRPC (`GetDepositByGHLTransactionID`). Provider
+  configuration (name, description, imageUrl, locationId, queryUrl,
+  paymentsUrl, supportsSubscriptionSchedule=false, providerApiKey) is stored
+  per-integration in the `payment_provider_configs` table. Webhook idempotency
+  reuses the `webhook_events` table. Config: `HIGHLEVEL_PAYMENT_URL`,
+  `HIGHLEVEL_QUERY_URL`, `HIGHLEVEL_PROVIDER_NAME`,
+  `HIGHLEVEL_PROVIDER_DESCRIPTION`, `HIGHLEVEL_PROVIDER_IMAGE_URL`,
+  `TRANSACTIONS_GRPC_ADDR`.
 - Status: IMPLEMENTED + production-reviewed (READY WITH WARNINGS).
 
 ---

@@ -26,7 +26,7 @@ INSERT INTO deposits (
     idempotency_key
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at
+RETURNING id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at, ghl_transaction_id, ghl_charge_id
 `
 
 type CreateDepositParams struct {
@@ -75,12 +75,14 @@ func (q *Queries) CreateDeposit(ctx context.Context, arg CreateDepositParams) (D
 		&i.FailureReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.GhlTransactionID,
+		&i.GhlChargeID,
 	)
 	return i, err
 }
 
 const getDepositByExternalReference = `-- name: GetDepositByExternalReference :one
-SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at FROM deposits WHERE external_reference = $1
+SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at, ghl_transaction_id, ghl_charge_id FROM deposits WHERE external_reference = $1
 `
 
 func (q *Queries) GetDepositByExternalReference(ctx context.Context, externalReference string) (Deposit, error) {
@@ -105,12 +107,78 @@ func (q *Queries) GetDepositByExternalReference(ctx context.Context, externalRef
 		&i.FailureReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.GhlTransactionID,
+		&i.GhlChargeID,
+	)
+	return i, err
+}
+
+const getDepositByGHLChargeID = `-- name: GetDepositByGHLChargeID :one
+SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at, ghl_transaction_id, ghl_charge_id FROM deposits WHERE ghl_charge_id = $1
+`
+
+func (q *Queries) GetDepositByGHLChargeID(ctx context.Context, ghlChargeID string) (Deposit, error) {
+	row := q.db.QueryRow(ctx, getDepositByGHLChargeID, ghlChargeID)
+	var i Deposit
+	err := row.Scan(
+		&i.ID,
+		&i.ClientID,
+		&i.CustomerID,
+		&i.MerchantID,
+		&i.Amount,
+		&i.Currency,
+		&i.PaymentType,
+		&i.PayerPhoneNumber,
+		&i.Provider,
+		&i.Status,
+		&i.ExternalReference,
+		&i.IdempotencyKey,
+		&i.InitiatedAt,
+		&i.CompletedAt,
+		&i.FailedAt,
+		&i.FailureReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.GhlTransactionID,
+		&i.GhlChargeID,
+	)
+	return i, err
+}
+
+const getDepositByGHLTransactionID = `-- name: GetDepositByGHLTransactionID :one
+SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at, ghl_transaction_id, ghl_charge_id FROM deposits WHERE ghl_transaction_id = $1
+`
+
+func (q *Queries) GetDepositByGHLTransactionID(ctx context.Context, ghlTransactionID string) (Deposit, error) {
+	row := q.db.QueryRow(ctx, getDepositByGHLTransactionID, ghlTransactionID)
+	var i Deposit
+	err := row.Scan(
+		&i.ID,
+		&i.ClientID,
+		&i.CustomerID,
+		&i.MerchantID,
+		&i.Amount,
+		&i.Currency,
+		&i.PaymentType,
+		&i.PayerPhoneNumber,
+		&i.Provider,
+		&i.Status,
+		&i.ExternalReference,
+		&i.IdempotencyKey,
+		&i.InitiatedAt,
+		&i.CompletedAt,
+		&i.FailedAt,
+		&i.FailureReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.GhlTransactionID,
+		&i.GhlChargeID,
 	)
 	return i, err
 }
 
 const getDepositByID = `-- name: GetDepositByID :one
-SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at FROM deposits WHERE id = $1
+SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at, ghl_transaction_id, ghl_charge_id FROM deposits WHERE id = $1
 `
 
 func (q *Queries) GetDepositByID(ctx context.Context, id uuid.UUID) (Deposit, error) {
@@ -135,12 +203,14 @@ func (q *Queries) GetDepositByID(ctx context.Context, id uuid.UUID) (Deposit, er
 		&i.FailureReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.GhlTransactionID,
+		&i.GhlChargeID,
 	)
 	return i, err
 }
 
 const getDepositByIdempotencyKey = `-- name: GetDepositByIdempotencyKey :one
-SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at FROM deposits WHERE idempotency_key = $1
+SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at, ghl_transaction_id, ghl_charge_id FROM deposits WHERE idempotency_key = $1
 `
 
 func (q *Queries) GetDepositByIdempotencyKey(ctx context.Context, idempotencyKey uuid.UUID) (Deposit, error) {
@@ -165,12 +235,14 @@ func (q *Queries) GetDepositByIdempotencyKey(ctx context.Context, idempotencyKey
 		&i.FailureReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.GhlTransactionID,
+		&i.GhlChargeID,
 	)
 	return i, err
 }
 
 const listDepositsByClient = `-- name: ListDepositsByClient :many
-SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at FROM deposits
+SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at, ghl_transaction_id, ghl_charge_id FROM deposits
 WHERE client_id = $1
 ORDER BY created_at DESC
 `
@@ -203,6 +275,8 @@ func (q *Queries) ListDepositsByClient(ctx context.Context, clientID uuid.UUID) 
 			&i.FailureReason,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.GhlTransactionID,
+			&i.GhlChargeID,
 		); err != nil {
 			return nil, err
 		}
@@ -215,7 +289,7 @@ func (q *Queries) ListDepositsByClient(ctx context.Context, clientID uuid.UUID) 
 }
 
 const listDepositsByCustomer = `-- name: ListDepositsByCustomer :many
-SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at FROM deposits
+SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at, ghl_transaction_id, ghl_charge_id FROM deposits
 WHERE customer_id = $1
 ORDER BY created_at DESC
 `
@@ -248,6 +322,8 @@ func (q *Queries) ListDepositsByCustomer(ctx context.Context, customerID uuid.UU
 			&i.FailureReason,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.GhlTransactionID,
+			&i.GhlChargeID,
 		); err != nil {
 			return nil, err
 		}
@@ -260,7 +336,7 @@ func (q *Queries) ListDepositsByCustomer(ctx context.Context, customerID uuid.UU
 }
 
 const listDepositsByMerchant = `-- name: ListDepositsByMerchant :many
-SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at FROM deposits
+SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at, ghl_transaction_id, ghl_charge_id FROM deposits
 WHERE merchant_id = $1
 ORDER BY created_at DESC
 `
@@ -293,6 +369,8 @@ func (q *Queries) ListDepositsByMerchant(ctx context.Context, merchantID uuid.UU
 			&i.FailureReason,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.GhlTransactionID,
+			&i.GhlChargeID,
 		); err != nil {
 			return nil, err
 		}
@@ -305,7 +383,7 @@ func (q *Queries) ListDepositsByMerchant(ctx context.Context, merchantID uuid.UU
 }
 
 const listDepositsByStatus = `-- name: ListDepositsByStatus :many
-SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at FROM deposits
+SELECT id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at, ghl_transaction_id, ghl_charge_id FROM deposits
 WHERE status = $1
 ORDER BY created_at DESC
 `
@@ -338,6 +416,8 @@ func (q *Queries) ListDepositsByStatus(ctx context.Context, status DepositStatus
 			&i.FailureReason,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.GhlTransactionID,
+			&i.GhlChargeID,
 		); err != nil {
 			return nil, err
 		}
@@ -349,12 +429,55 @@ func (q *Queries) ListDepositsByStatus(ctx context.Context, status DepositStatus
 	return items, nil
 }
 
+const updateDepositGHLReference = `-- name: UpdateDepositGHLReference :one
+UPDATE deposits
+SET ghl_transaction_id = $2,
+    ghl_charge_id = $3,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at, ghl_transaction_id, ghl_charge_id
+`
+
+type UpdateDepositGHLReferenceParams struct {
+	ID               uuid.UUID `json:"id"`
+	GhlTransactionID string    `json:"ghl_transaction_id"`
+	GhlChargeID      string    `json:"ghl_charge_id"`
+}
+
+func (q *Queries) UpdateDepositGHLReference(ctx context.Context, arg UpdateDepositGHLReferenceParams) (Deposit, error) {
+	row := q.db.QueryRow(ctx, updateDepositGHLReference, arg.ID, arg.GhlTransactionID, arg.GhlChargeID)
+	var i Deposit
+	err := row.Scan(
+		&i.ID,
+		&i.ClientID,
+		&i.CustomerID,
+		&i.MerchantID,
+		&i.Amount,
+		&i.Currency,
+		&i.PaymentType,
+		&i.PayerPhoneNumber,
+		&i.Provider,
+		&i.Status,
+		&i.ExternalReference,
+		&i.IdempotencyKey,
+		&i.InitiatedAt,
+		&i.CompletedAt,
+		&i.FailedAt,
+		&i.FailureReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.GhlTransactionID,
+		&i.GhlChargeID,
+	)
+	return i, err
+}
+
 const updateDepositStatus = `-- name: UpdateDepositStatus :one
 UPDATE deposits
 SET status = $2,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at
+RETURNING id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at, ghl_transaction_id, ghl_charge_id
 `
 
 type UpdateDepositStatusParams struct {
@@ -384,6 +507,8 @@ func (q *Queries) UpdateDepositStatus(ctx context.Context, arg UpdateDepositStat
 		&i.FailureReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.GhlTransactionID,
+		&i.GhlChargeID,
 	)
 	return i, err
 }
@@ -394,7 +519,7 @@ SET status = $2,
     completed_at = NOW(),
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at
+RETURNING id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at, ghl_transaction_id, ghl_charge_id
 `
 
 type UpdateDepositStatusAndCompletedAtParams struct {
@@ -424,6 +549,8 @@ func (q *Queries) UpdateDepositStatusAndCompletedAt(ctx context.Context, arg Upd
 		&i.FailureReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.GhlTransactionID,
+		&i.GhlChargeID,
 	)
 	return i, err
 }
@@ -435,7 +562,7 @@ SET status = $2,
     failure_reason = $3,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at
+RETURNING id, client_id, customer_id, merchant_id, amount, currency, payment_type, payer_phone_number, provider, status, external_reference, idempotency_key, initiated_at, completed_at, failed_at, failure_reason, created_at, updated_at, ghl_transaction_id, ghl_charge_id
 `
 
 type UpdateDepositStatusAndFailedAtParams struct {
@@ -466,6 +593,8 @@ func (q *Queries) UpdateDepositStatusAndFailedAt(ctx context.Context, arg Update
 		&i.FailureReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.GhlTransactionID,
+		&i.GhlChargeID,
 	)
 	return i, err
 }

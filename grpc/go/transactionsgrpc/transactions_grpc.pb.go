@@ -355,8 +355,9 @@ var CustomerService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	DepositService_InitiateDeposit_FullMethodName = "/transactionsgrpc.DepositService/InitiateDeposit"
-	DepositService_GetDeposit_FullMethodName      = "/transactionsgrpc.DepositService/GetDeposit"
+	DepositService_InitiateDeposit_FullMethodName              = "/transactionsgrpc.DepositService/InitiateDeposit"
+	DepositService_GetDeposit_FullMethodName                   = "/transactionsgrpc.DepositService/GetDeposit"
+	DepositService_GetDepositByGHLTransactionID_FullMethodName = "/transactionsgrpc.DepositService/GetDepositByGHLTransactionID"
 )
 
 // DepositServiceClient is the client API for DepositService service.
@@ -369,6 +370,10 @@ type DepositServiceClient interface {
 	InitiateDeposit(ctx context.Context, in *CreateDepositRequest, opts ...grpc.CallOption) (*CreateDepositResponse, error)
 	// GetDeposit fetches a deposit by id.
 	GetDeposit(ctx context.Context, in *GetDepositRequest, opts ...grpc.CallOption) (*GetDepositResponse, error)
+	// GetDepositByGHLTransactionID fetches a deposit by its GoHighLevel
+	// transaction identifier. This is used by the GHL Custom Payment Provider
+	// query endpoint to correlate a HighLevel transaction with an RVPay deposit.
+	GetDepositByGHLTransactionID(ctx context.Context, in *GetDepositByGHLTransactionIDRequest, opts ...grpc.CallOption) (*GetDepositByGHLTransactionIDResponse, error)
 }
 
 type depositServiceClient struct {
@@ -399,6 +404,16 @@ func (c *depositServiceClient) GetDeposit(ctx context.Context, in *GetDepositReq
 	return out, nil
 }
 
+func (c *depositServiceClient) GetDepositByGHLTransactionID(ctx context.Context, in *GetDepositByGHLTransactionIDRequest, opts ...grpc.CallOption) (*GetDepositByGHLTransactionIDResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetDepositByGHLTransactionIDResponse)
+	err := c.cc.Invoke(ctx, DepositService_GetDepositByGHLTransactionID_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DepositServiceServer is the server API for DepositService service.
 // All implementations must embed UnimplementedDepositServiceServer
 // for forward compatibility.
@@ -409,6 +424,10 @@ type DepositServiceServer interface {
 	InitiateDeposit(context.Context, *CreateDepositRequest) (*CreateDepositResponse, error)
 	// GetDeposit fetches a deposit by id.
 	GetDeposit(context.Context, *GetDepositRequest) (*GetDepositResponse, error)
+	// GetDepositByGHLTransactionID fetches a deposit by its GoHighLevel
+	// transaction identifier. This is used by the GHL Custom Payment Provider
+	// query endpoint to correlate a HighLevel transaction with an RVPay deposit.
+	GetDepositByGHLTransactionID(context.Context, *GetDepositByGHLTransactionIDRequest) (*GetDepositByGHLTransactionIDResponse, error)
 	mustEmbedUnimplementedDepositServiceServer()
 }
 
@@ -424,6 +443,9 @@ func (UnimplementedDepositServiceServer) InitiateDeposit(context.Context, *Creat
 }
 func (UnimplementedDepositServiceServer) GetDeposit(context.Context, *GetDepositRequest) (*GetDepositResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetDeposit not implemented")
+}
+func (UnimplementedDepositServiceServer) GetDepositByGHLTransactionID(context.Context, *GetDepositByGHLTransactionIDRequest) (*GetDepositByGHLTransactionIDResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetDepositByGHLTransactionID not implemented")
 }
 func (UnimplementedDepositServiceServer) mustEmbedUnimplementedDepositServiceServer() {}
 func (UnimplementedDepositServiceServer) testEmbeddedByValue()                        {}
@@ -482,6 +504,24 @@ func _DepositService_GetDeposit_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DepositService_GetDepositByGHLTransactionID_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDepositByGHLTransactionIDRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DepositServiceServer).GetDepositByGHLTransactionID(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DepositService_GetDepositByGHLTransactionID_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DepositServiceServer).GetDepositByGHLTransactionID(ctx, req.(*GetDepositByGHLTransactionIDRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DepositService_ServiceDesc is the grpc.ServiceDesc for DepositService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -496,6 +536,10 @@ var DepositService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetDeposit",
 			Handler:    _DepositService_GetDeposit_Handler,
+		},
+		{
+			MethodName: "GetDepositByGHLTransactionID",
+			Handler:    _DepositService_GetDepositByGHLTransactionID_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

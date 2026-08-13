@@ -186,6 +186,21 @@ type OauthToken struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+type PaymentProviderConfig struct {
+	ID                           uuid.UUID `json:"id"`
+	IntegrationID                uuid.UUID `json:"integration_id"`
+	ProviderName                 string    `json:"provider_name"`
+	ProviderDescription          string    `json:"provider_description"`
+	ProviderImageUrl             string    `json:"provider_image_url"`
+	LocationID                   string    `json:"location_id"`
+	QueryUrl                     string    `json:"query_url"`
+	PaymentsUrl                  string    `json:"payments_url"`
+	SupportsSubscriptionSchedule bool      `json:"supports_subscription_schedule"`
+	ProviderApiKey               string    `json:"provider_api_key"`
+	CreatedAt                    time.Time `json:"created_at"`
+	UpdatedAt                    time.Time `json:"updated_at"`
+}
+
 type Platform struct {
 	ID             uuid.UUID `json:"id"`
 	Name           string    `json:"name"`
