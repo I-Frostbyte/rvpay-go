@@ -21,6 +21,7 @@ import (
 	"github.com/I-Frostbyte/rvpay-go/transactions/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/transactions/deposits"
 	"github.com/I-Frostbyte/rvpay-go/transactions/merchants"
+	"github.com/I-Frostbyte/rvpay-go/transactions/payments"
 	"github.com/I-Frostbyte/rvpay-go/transactions/payouts"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -100,6 +101,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	merchantService := merchants.NewMerchantService(merchantRepo, logger)
 	customerService := customers.NewCustomerService(customerRepo, logger)
 	depositService := deposits.NewDepositService(depositRepo, customerRepo, logger)
+	paymentService := payments.NewPaymentService(depositRepo, logger)
 	payoutService := payouts.NewPayoutService(payoutRepo, logger)
 
 	svrOpts := []grpc.ServerOption{
@@ -117,6 +119,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	transactionsgrpc.RegisterMerchantServiceServer(grpcServer, merchantService)
 	transactionsgrpc.RegisterCustomerServiceServer(grpcServer, customerService)
 	transactionsgrpc.RegisterDepositServiceServer(grpcServer, depositService)
+	transactionsgrpc.RegisterPaymentServiceServer(grpcServer, paymentService)
 	transactionsgrpc.RegisterPayoutServiceServer(grpcServer, payoutService)
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	logger.Info().Msg("Successfully registered Transactions services...")
@@ -135,6 +138,9 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	}
 	if err := transactionsgrpc.RegisterDepositServiceHandlerServer(ctx, gatewayMux, depositService); err != nil {
 		return fmt.Errorf("register grpc-gateway deposit handler: %w", err)
+	}
+	if err := transactionsgrpc.RegisterPaymentServiceHandlerServer(ctx, gatewayMux, paymentService); err != nil {
+		return fmt.Errorf("register grpc-gateway payment handler: %w", err)
 	}
 	if err := transactionsgrpc.RegisterPayoutServiceHandlerServer(ctx, gatewayMux, payoutService); err != nil {
 		return fmt.Errorf("register grpc-gateway payout handler: %w", err)

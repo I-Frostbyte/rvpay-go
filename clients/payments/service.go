@@ -49,26 +49,29 @@ type WebhookEvent struct {
 	Data          map[string]interface{} `json:"data"`
 }
 
-// Service manages the GHL Custom Payment Provider backend integration.
-// It handles the payment query endpoint (verify operation) and the
-// payment-provider webhook (payment.captured), correlating HighLevel
-// transactions with RVPay deposits via the Transactions service.
+// Service is the GHL Custom Payment Provider transport adapter. It owns the
+// GHL-facing request parsing, credential validation, provider configuration
+// lookup, and webhook idempotency. It does NOT own payment-domain business
+// logic: payment verification, transaction lookup, payment state
+// interpretation, and payment webhook business processing are delegated to
+// the Transactions service via gRPC.
 type Service struct {
 	configRepo         repo.PaymentProviderConfigRepo
 	integrationRepo    repo.IntegrationRepo
 	webhookEventRepo   repo.WebhookEventRepo
-	transactionsClient transactionsgrpc.DepositServiceClient
+	transactionsClient transactionsgrpc.PaymentServiceClient
 	logger             zerolog.Logger
 }
 
-// NewService creates a new GHL Custom Payment Provider service.
-// transactionsClient is the gRPC client used to correlate HighLevel
-// transactions with RVPay deposits in the Transactions service.
+// NewService creates a new GHL Custom Payment Provider transport adapter.
+// transactionsClient is the gRPC client used to delegate payment-domain
+// decisions (verification and webhook business processing) to the
+// Transactions service.
 func NewService(
 	configRepo repo.PaymentProviderConfigRepo,
 	integrationRepo repo.IntegrationRepo,
 	webhookEventRepo repo.WebhookEventRepo,
-	transactionsClient transactionsgrpc.DepositServiceClient,
+	transactionsClient transactionsgrpc.PaymentServiceClient,
 	logger zerolog.Logger,
 ) *Service {
 	return &Service{
@@ -82,9 +85,9 @@ func NewService(
 
 // HandleQuery processes a HighLevel payment query request. It validates the
 // provider API key, inspects the operation type, and for the verify operation
-// correlates the referenced transaction with an RVPay deposit to determine its
-// status. It returns the HighLevel contract response and never leaks internal
-// RVPay transaction objects or database models.
+// delegates the payment-domain decision to the Transactions service. It
+// returns the HighLevel contract response and never leaks internal RVPay
+// transaction objects or database models.
 func (s *Service) HandleQuery(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "query request is required")
@@ -111,18 +114,17 @@ func (s *Service) HandleQuery(ctx context.Context, req *QueryRequest) (*QueryRes
 	}
 }
 
-// handleVerify processes the verify operation. It correlates the HighLevel
-// transaction with an RVPay deposit via the Transactions service and returns
-// the appropriate HighLevel contract response.
+// handleVerify processes the verify operation. It delegates the payment-domain
+// decision (transaction lookup, state interpretation) to the Transactions
+// service and maps the result to the HighLevel contract response.
 func (s *Service) handleVerify(ctx context.Context, config sqlc.PaymentProviderConfig, req *QueryRequest) (*QueryResponse, error) {
 	if strings.TrimSpace(req.TransactionID) == "" {
 		return nil, ErrMissingTransactionID
 	}
 
-	// Correlate the HighLevel transaction with an RVPay deposit by calling the
-	// Transactions service. This keeps transaction-status logic in the
-	// Transactions domain and avoids duplicating it in the HTTP handler.
-	depositResp, err := s.transactionsClient.GetDepositByGHLTransactionID(ctx, &transactionsgrpc.GetDepositByGHLTransactionIDRequest{
+	// Delegate the payment-domain decision to the Transactions service. The
+	// transport adapter never interprets transaction state.
+	resp, err := s.transactionsClient.VerifyPayment(ctx, &transactionsgrpc.VerifyPaymentRequest{
 		GhlTransactionId: req.TransactionID,
 	})
 	if err != nil {
@@ -133,25 +135,16 @@ func (s *Service) handleVerify(ctx context.Context, config sqlc.PaymentProviderC
 		return nil, status.Error(codes.Internal, "could not verify transaction")
 	}
 
-	deposit := depositResp.GetDeposit()
-	if deposit == nil {
-		return nil, ErrTransactionNotFound
-	}
-
-	switch deposit.GetStatus() {
-	case transactionsgrpc.DepositStatus_DEPOSIT_STATUS_COMPLETED:
-		return &QueryResponse{Success: true}, nil
-	case transactionsgrpc.DepositStatus_DEPOSIT_STATUS_FAILED:
-		return &QueryResponse{Failed: true}, nil
-	default:
-		// INITIATED, PROCESSING, and UNSPECIFIED are treated as pending.
-		return &QueryResponse{Success: false}, nil
-	}
+	return &QueryResponse{
+		Success: resp.GetSuccess(),
+		Failed:  resp.GetFailed(),
+	}, nil
 }
 
 // HandleWebhook processes a HighLevel payment-provider webhook event. It is
 // idempotent: duplicate deliveries are detected via the webhook_events table
-// unique constraint and acknowledged without reprocessing.
+// unique constraint and acknowledged without reprocessing. Payment-domain
+// business processing is delegated to the Transactions service.
 func (s *Service) HandleWebhook(ctx context.Context, body []byte) error {
 	var event WebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
@@ -200,52 +193,18 @@ func (s *Service) HandleWebhook(ctx context.Context, body []byte) error {
 		return translateError(err)
 	}
 
-	// Only payment.captured is relevant to the current one-time payment flow.
-	// Unknown event types are acknowledged safely without processing.
-	switch event.EventType {
-	case "payment.captured":
-		return s.handlePaymentCaptured(ctx, integration, event)
-	default:
-		s.logger.Info().Str("event_type", event.EventType).Str("event_id", event.EventID).Msg("Unhandled payment webhook event type")
-		return nil
-	}
-}
-
-// handlePaymentCaptured processes a payment.captured event. It correlates the
-// HighLevel charge/transaction with an RVPay deposit and records the GHL
-// reference on the deposit via the Transactions service.
-func (s *Service) handlePaymentCaptured(ctx context.Context, integration sqlc.Integration, event WebhookEvent) error {
-	if strings.TrimSpace(event.TransactionID) == "" {
-		s.logger.Warn().Str("event_id", event.EventID).Msg("payment.captured event missing transactionId")
-		return nil
-	}
-
-	// Correlate the HighLevel transaction with an RVPay deposit. If the deposit
-	// is not found, log and acknowledge (the event is already recorded for
-	// idempotency; a later reconciliation can resolve it).
-	depositResp, err := s.transactionsClient.GetDepositByGHLTransactionID(ctx, &transactionsgrpc.GetDepositByGHLTransactionIDRequest{
-		GhlTransactionId: event.TransactionID,
+	// Delegate payment-domain business processing to the Transactions service.
+	// The transport adapter does not interpret event semantics.
+	_, err = s.transactionsClient.ProcessPaymentWebhook(ctx, &transactionsgrpc.ProcessPaymentWebhookRequest{
+		EventType:     event.EventType,
+		TransactionId: event.TransactionID,
+		ChargeId:      event.ChargeID,
+		LocationId:    event.LocationID,
 	})
 	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			s.logger.Warn().Str("transaction_id", event.TransactionID).Msg("payment.captured event references unknown transaction")
-			return nil
-		}
-		s.logger.Error().Err(err).Str("transaction_id", event.TransactionID).Msg("could not correlate payment.captured event")
-		return status.Error(codes.Internal, "could not correlate payment event")
+		s.logger.Error().Err(err).Str("event_id", event.EventID).Msg("could not process payment webhook with Transactions service")
+		return status.Error(codes.Internal, "could not process payment webhook")
 	}
-
-	deposit := depositResp.GetDeposit()
-	if deposit == nil {
-		s.logger.Warn().Str("transaction_id", event.TransactionID).Msg("payment.captured event references unknown transaction")
-		return nil
-	}
-
-	s.logger.Info().
-		Str("deposit_id", deposit.GetId()).
-		Str("transaction_id", event.TransactionID).
-		Str("charge_id", event.ChargeID).
-		Msg("payment.captured event correlated with deposit")
 
 	return nil
 }

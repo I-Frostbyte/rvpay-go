@@ -125,7 +125,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 		return fmt.Errorf("connect to transactions service: %w", err)
 	}
 	defer transactionsConn.Close()
-	transactionsClient := transactionsgrpc.NewDepositServiceClient(transactionsConn)
+	transactionsClient := transactionsgrpc.NewPaymentServiceClient(transactionsConn)
 
 	paymentService := payments.NewService(paymentProviderConfigRepo, integrationRepo, webhookEventRepo, transactionsClient, logger)
 	paymentQueryHandler := clientshttp.NewPaymentQueryHandler(paymentService, logger)

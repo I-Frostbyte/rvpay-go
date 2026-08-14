@@ -1629,6 +1629,221 @@ func (x *GetDepositByGHLTransactionIDResponse) GetDeposit() *Deposit {
 	return nil
 }
 
+// VerifyPaymentRequest requests verification of a payment referenced by a
+// GoHighLevel transaction identifier. This is used by the GHL Custom Payment
+// Provider query endpoint (verify operation).
+type VerifyPaymentRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ghl_transaction_id is the GoHighLevel transaction identifier.
+	GhlTransactionId string `protobuf:"bytes,1,opt,name=ghl_transaction_id,json=ghlTransactionId,proto3" json:"ghl_transaction_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *VerifyPaymentRequest) Reset() {
+	*x = VerifyPaymentRequest{}
+	mi := &file_transactions_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VerifyPaymentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VerifyPaymentRequest) ProtoMessage() {}
+
+func (x *VerifyPaymentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_transactions_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VerifyPaymentRequest.ProtoReflect.Descriptor instead.
+func (*VerifyPaymentRequest) Descriptor() ([]byte, []int) {
+	return file_transactions_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *VerifyPaymentRequest) GetGhlTransactionId() string {
+	if x != nil {
+		return x.GhlTransactionId
+	}
+	return ""
+}
+
+// VerifyPaymentResponse returns the payment verification result.
+type VerifyPaymentResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// success indicates the payment has succeeded.
+	Success bool `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	// failed indicates the payment has failed.
+	Failed        bool `protobuf:"varint,2,opt,name=failed,proto3" json:"failed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VerifyPaymentResponse) Reset() {
+	*x = VerifyPaymentResponse{}
+	mi := &file_transactions_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VerifyPaymentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VerifyPaymentResponse) ProtoMessage() {}
+
+func (x *VerifyPaymentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_transactions_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VerifyPaymentResponse.ProtoReflect.Descriptor instead.
+func (*VerifyPaymentResponse) Descriptor() ([]byte, []int) {
+	return file_transactions_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *VerifyPaymentResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *VerifyPaymentResponse) GetFailed() bool {
+	if x != nil {
+		return x.Failed
+	}
+	return false
+}
+
+// ProcessPaymentWebhookRequest carries a payment-provider webhook event for
+// business processing. Only one-time payment events relevant to RVPay are
+// processed (e.g. payment.captured); subscription events are not supported.
+type ProcessPaymentWebhookRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// event_type is the HighLevel payment event type (e.g. payment.captured).
+	EventType string `protobuf:"bytes,1,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
+	// transaction_id is the GoHighLevel transaction identifier.
+	TransactionId string `protobuf:"bytes,2,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	// charge_id is the GoHighLevel charge identifier.
+	ChargeId string `protobuf:"bytes,3,opt,name=charge_id,json=chargeId,proto3" json:"charge_id,omitempty"`
+	// location_id is the GoHighLevel location identifier.
+	LocationId    string `protobuf:"bytes,4,opt,name=location_id,json=locationId,proto3" json:"location_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProcessPaymentWebhookRequest) Reset() {
+	*x = ProcessPaymentWebhookRequest{}
+	mi := &file_transactions_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProcessPaymentWebhookRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProcessPaymentWebhookRequest) ProtoMessage() {}
+
+func (x *ProcessPaymentWebhookRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_transactions_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProcessPaymentWebhookRequest.ProtoReflect.Descriptor instead.
+func (*ProcessPaymentWebhookRequest) Descriptor() ([]byte, []int) {
+	return file_transactions_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *ProcessPaymentWebhookRequest) GetEventType() string {
+	if x != nil {
+		return x.EventType
+	}
+	return ""
+}
+
+func (x *ProcessPaymentWebhookRequest) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+func (x *ProcessPaymentWebhookRequest) GetChargeId() string {
+	if x != nil {
+		return x.ChargeId
+	}
+	return ""
+}
+
+func (x *ProcessPaymentWebhookRequest) GetLocationId() string {
+	if x != nil {
+		return x.LocationId
+	}
+	return ""
+}
+
+// ProcessPaymentWebhookResponse acknowledges a processed payment webhook.
+type ProcessPaymentWebhookResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProcessPaymentWebhookResponse) Reset() {
+	*x = ProcessPaymentWebhookResponse{}
+	mi := &file_transactions_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProcessPaymentWebhookResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProcessPaymentWebhookResponse) ProtoMessage() {}
+
+func (x *ProcessPaymentWebhookResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_transactions_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProcessPaymentWebhookResponse.ProtoReflect.Descriptor instead.
+func (*ProcessPaymentWebhookResponse) Descriptor() ([]byte, []int) {
+	return file_transactions_proto_rawDescGZIP(), []int{23}
+}
+
 // CreatePayoutRequest requests a payout.
 type CreatePayoutRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1648,7 +1863,7 @@ type CreatePayoutRequest struct {
 
 func (x *CreatePayoutRequest) Reset() {
 	*x = CreatePayoutRequest{}
-	mi := &file_transactions_proto_msgTypes[20]
+	mi := &file_transactions_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1660,7 +1875,7 @@ func (x *CreatePayoutRequest) String() string {
 func (*CreatePayoutRequest) ProtoMessage() {}
 
 func (x *CreatePayoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_transactions_proto_msgTypes[20]
+	mi := &file_transactions_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1673,7 +1888,7 @@ func (x *CreatePayoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreatePayoutRequest.ProtoReflect.Descriptor instead.
 func (*CreatePayoutRequest) Descriptor() ([]byte, []int) {
-	return file_transactions_proto_rawDescGZIP(), []int{20}
+	return file_transactions_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *CreatePayoutRequest) GetClientId() string {
@@ -1722,7 +1937,7 @@ type CreatePayoutResponse struct {
 
 func (x *CreatePayoutResponse) Reset() {
 	*x = CreatePayoutResponse{}
-	mi := &file_transactions_proto_msgTypes[21]
+	mi := &file_transactions_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1734,7 +1949,7 @@ func (x *CreatePayoutResponse) String() string {
 func (*CreatePayoutResponse) ProtoMessage() {}
 
 func (x *CreatePayoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_transactions_proto_msgTypes[21]
+	mi := &file_transactions_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1747,7 +1962,7 @@ func (x *CreatePayoutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreatePayoutResponse.ProtoReflect.Descriptor instead.
 func (*CreatePayoutResponse) Descriptor() ([]byte, []int) {
-	return file_transactions_proto_rawDescGZIP(), []int{21}
+	return file_transactions_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *CreatePayoutResponse) GetPayout() *Payout {
@@ -1768,7 +1983,7 @@ type GetPayoutRequest struct {
 
 func (x *GetPayoutRequest) Reset() {
 	*x = GetPayoutRequest{}
-	mi := &file_transactions_proto_msgTypes[22]
+	mi := &file_transactions_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1780,7 +1995,7 @@ func (x *GetPayoutRequest) String() string {
 func (*GetPayoutRequest) ProtoMessage() {}
 
 func (x *GetPayoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_transactions_proto_msgTypes[22]
+	mi := &file_transactions_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1793,7 +2008,7 @@ func (x *GetPayoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPayoutRequest.ProtoReflect.Descriptor instead.
 func (*GetPayoutRequest) Descriptor() ([]byte, []int) {
-	return file_transactions_proto_rawDescGZIP(), []int{22}
+	return file_transactions_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *GetPayoutRequest) GetPayoutId() string {
@@ -1814,7 +2029,7 @@ type GetPayoutResponse struct {
 
 func (x *GetPayoutResponse) Reset() {
 	*x = GetPayoutResponse{}
-	mi := &file_transactions_proto_msgTypes[23]
+	mi := &file_transactions_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1826,7 +2041,7 @@ func (x *GetPayoutResponse) String() string {
 func (*GetPayoutResponse) ProtoMessage() {}
 
 func (x *GetPayoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_transactions_proto_msgTypes[23]
+	mi := &file_transactions_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1839,7 +2054,7 @@ func (x *GetPayoutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPayoutResponse.ProtoReflect.Descriptor instead.
 func (*GetPayoutResponse) Descriptor() ([]byte, []int) {
-	return file_transactions_proto_rawDescGZIP(), []int{23}
+	return file_transactions_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *GetPayoutResponse) GetPayout() *Payout {
@@ -1962,7 +2177,20 @@ const file_transactions_proto_rawDesc = "" +
 	"#GetDepositByGHLTransactionIDRequest\x12,\n" +
 	"\x12ghl_transaction_id\x18\x01 \x01(\tR\x10ghlTransactionId\"[\n" +
 	"$GetDepositByGHLTransactionIDResponse\x123\n" +
-	"\adeposit\x18\x01 \x01(\v2\x19.transactionsgrpc.DepositR\adeposit\"\xe5\x01\n" +
+	"\adeposit\x18\x01 \x01(\v2\x19.transactionsgrpc.DepositR\adeposit\"D\n" +
+	"\x14VerifyPaymentRequest\x12,\n" +
+	"\x12ghl_transaction_id\x18\x01 \x01(\tR\x10ghlTransactionId\"I\n" +
+	"\x15VerifyPaymentResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x16\n" +
+	"\x06failed\x18\x02 \x01(\bR\x06failed\"\xa2\x01\n" +
+	"\x1cProcessPaymentWebhookRequest\x12\x1d\n" +
+	"\n" +
+	"event_type\x18\x01 \x01(\tR\teventType\x12%\n" +
+	"\x0etransaction_id\x18\x02 \x01(\tR\rtransactionId\x12\x1b\n" +
+	"\tcharge_id\x18\x03 \x01(\tR\bchargeId\x12\x1f\n" +
+	"\vlocation_id\x18\x04 \x01(\tR\n" +
+	"locationId\"\x1f\n" +
+	"\x1dProcessPaymentWebhookResponse\"\xe5\x01\n" +
 	"\x13CreatePayoutRequest\x12\x1b\n" +
 	"\tclient_id\x18\x01 \x01(\tR\bclientId\x12\x1f\n" +
 	"\vmerchant_id\x18\x02 \x01(\tR\n" +
@@ -2009,7 +2237,10 @@ const file_transactions_proto_rawDesc = "" +
 	"\x0fInitiateDeposit\x12&.transactionsgrpc.CreateDepositRequest\x1a'.transactionsgrpc.CreateDepositResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/v1/public/deposits\x12\x81\x01\n" +
 	"\n" +
 	"GetDeposit\x12#.transactionsgrpc.GetDepositRequest\x1a$.transactionsgrpc.GetDepositResponse\"(\x82\xd3\xe4\x93\x02\"\x12 /v1/public/deposits/{deposit_id}\x12\xd2\x01\n" +
-	"\x1cGetDepositByGHLTransactionID\x125.transactionsgrpc.GetDepositByGHLTransactionIDRequest\x1a6.transactionsgrpc.GetDepositByGHLTransactionIDResponse\"C\x82\xd3\xe4\x93\x02=\x12;/v1/public/deposits/by-ghl-transaction/{ghl_transaction_id}2\x8c\x02\n" +
+	"\x1cGetDepositByGHLTransactionID\x125.transactionsgrpc.GetDepositByGHLTransactionIDRequest\x1a6.transactionsgrpc.GetDepositByGHLTransactionIDResponse\"C\x82\xd3\xe4\x93\x02=\x12;/v1/public/deposits/by-ghl-transaction/{ghl_transaction_id}2\xbd\x02\n" +
+	"\x0ePaymentService\x12\x87\x01\n" +
+	"\rVerifyPayment\x12&.transactionsgrpc.VerifyPaymentRequest\x1a'.transactionsgrpc.VerifyPaymentResponse\"%\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/v1/public/payments/verify\x12\xa0\x01\n" +
+	"\x15ProcessPaymentWebhook\x12..transactionsgrpc.ProcessPaymentWebhookRequest\x1a/.transactionsgrpc.ProcessPaymentWebhookResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/public/payments/webhook2\x8c\x02\n" +
 	"\rPayoutService\x12}\n" +
 	"\rRequestPayout\x12%.transactionsgrpc.CreatePayoutRequest\x1a&.transactionsgrpc.CreatePayoutResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/public/payouts\x12|\n" +
 	"\tGetPayout\x12\".transactionsgrpc.GetPayoutRequest\x1a#.transactionsgrpc.GetPayoutResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/v1/public/payouts/{payout_id}B:Z8github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpcb\x06proto3"
@@ -2027,7 +2258,7 @@ func file_transactions_proto_rawDescGZIP() []byte {
 }
 
 var file_transactions_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_transactions_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_transactions_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_transactions_proto_goTypes = []any{
 	(MerchantStatus)(0),                          // 0: transactionsgrpc.MerchantStatus
 	(CustomerStatus)(0),                          // 1: transactionsgrpc.CustomerStatus
@@ -2053,56 +2284,60 @@ var file_transactions_proto_goTypes = []any{
 	(*GetDepositResponse)(nil),                   // 21: transactionsgrpc.GetDepositResponse
 	(*GetDepositByGHLTransactionIDRequest)(nil),  // 22: transactionsgrpc.GetDepositByGHLTransactionIDRequest
 	(*GetDepositByGHLTransactionIDResponse)(nil), // 23: transactionsgrpc.GetDepositByGHLTransactionIDResponse
-	(*CreatePayoutRequest)(nil),                  // 24: transactionsgrpc.CreatePayoutRequest
-	(*CreatePayoutResponse)(nil),                 // 25: transactionsgrpc.CreatePayoutResponse
-	(*GetPayoutRequest)(nil),                     // 26: transactionsgrpc.GetPayoutRequest
-	(*GetPayoutResponse)(nil),                    // 27: transactionsgrpc.GetPayoutResponse
-	(*timestamppb.Timestamp)(nil),                // 28: google.protobuf.Timestamp
-	(*commongrpc.Money)(nil),                     // 29: commongrpc.Money
-	(commongrpc.PaymentType)(0),                  // 30: commongrpc.PaymentType
-	(commongrpc.Provider)(0),                     // 31: commongrpc.Provider
-	(*commongrpc.PaginationRequest)(nil),         // 32: commongrpc.PaginationRequest
-	(*commongrpc.PaginationResponse)(nil),        // 33: commongrpc.PaginationResponse
+	(*VerifyPaymentRequest)(nil),                 // 24: transactionsgrpc.VerifyPaymentRequest
+	(*VerifyPaymentResponse)(nil),                // 25: transactionsgrpc.VerifyPaymentResponse
+	(*ProcessPaymentWebhookRequest)(nil),         // 26: transactionsgrpc.ProcessPaymentWebhookRequest
+	(*ProcessPaymentWebhookResponse)(nil),        // 27: transactionsgrpc.ProcessPaymentWebhookResponse
+	(*CreatePayoutRequest)(nil),                  // 28: transactionsgrpc.CreatePayoutRequest
+	(*CreatePayoutResponse)(nil),                 // 29: transactionsgrpc.CreatePayoutResponse
+	(*GetPayoutRequest)(nil),                     // 30: transactionsgrpc.GetPayoutRequest
+	(*GetPayoutResponse)(nil),                    // 31: transactionsgrpc.GetPayoutResponse
+	(*timestamppb.Timestamp)(nil),                // 32: google.protobuf.Timestamp
+	(*commongrpc.Money)(nil),                     // 33: commongrpc.Money
+	(commongrpc.PaymentType)(0),                  // 34: commongrpc.PaymentType
+	(commongrpc.Provider)(0),                     // 35: commongrpc.Provider
+	(*commongrpc.PaginationRequest)(nil),         // 36: commongrpc.PaginationRequest
+	(*commongrpc.PaginationResponse)(nil),        // 37: commongrpc.PaginationResponse
 }
 var file_transactions_proto_depIdxs = []int32{
 	0,  // 0: transactionsgrpc.Merchant.status:type_name -> transactionsgrpc.MerchantStatus
-	28, // 1: transactionsgrpc.Merchant.created_at:type_name -> google.protobuf.Timestamp
-	28, // 2: transactionsgrpc.Merchant.updated_at:type_name -> google.protobuf.Timestamp
+	32, // 1: transactionsgrpc.Merchant.created_at:type_name -> google.protobuf.Timestamp
+	32, // 2: transactionsgrpc.Merchant.updated_at:type_name -> google.protobuf.Timestamp
 	1,  // 3: transactionsgrpc.Customer.status:type_name -> transactionsgrpc.CustomerStatus
-	28, // 4: transactionsgrpc.Customer.created_at:type_name -> google.protobuf.Timestamp
-	28, // 5: transactionsgrpc.Customer.updated_at:type_name -> google.protobuf.Timestamp
-	29, // 6: transactionsgrpc.Deposit.amount:type_name -> commongrpc.Money
-	30, // 7: transactionsgrpc.Deposit.payment_type:type_name -> commongrpc.PaymentType
-	31, // 8: transactionsgrpc.Deposit.provider:type_name -> commongrpc.Provider
+	32, // 4: transactionsgrpc.Customer.created_at:type_name -> google.protobuf.Timestamp
+	32, // 5: transactionsgrpc.Customer.updated_at:type_name -> google.protobuf.Timestamp
+	33, // 6: transactionsgrpc.Deposit.amount:type_name -> commongrpc.Money
+	34, // 7: transactionsgrpc.Deposit.payment_type:type_name -> commongrpc.PaymentType
+	35, // 8: transactionsgrpc.Deposit.provider:type_name -> commongrpc.Provider
 	2,  // 9: transactionsgrpc.Deposit.status:type_name -> transactionsgrpc.DepositStatus
-	28, // 10: transactionsgrpc.Deposit.initiated_at:type_name -> google.protobuf.Timestamp
-	28, // 11: transactionsgrpc.Deposit.completed_at:type_name -> google.protobuf.Timestamp
-	28, // 12: transactionsgrpc.Deposit.failed_at:type_name -> google.protobuf.Timestamp
-	28, // 13: transactionsgrpc.Deposit.created_at:type_name -> google.protobuf.Timestamp
-	28, // 14: transactionsgrpc.Deposit.updated_at:type_name -> google.protobuf.Timestamp
-	29, // 15: transactionsgrpc.Payout.amount:type_name -> commongrpc.Money
-	31, // 16: transactionsgrpc.Payout.provider:type_name -> commongrpc.Provider
+	32, // 10: transactionsgrpc.Deposit.initiated_at:type_name -> google.protobuf.Timestamp
+	32, // 11: transactionsgrpc.Deposit.completed_at:type_name -> google.protobuf.Timestamp
+	32, // 12: transactionsgrpc.Deposit.failed_at:type_name -> google.protobuf.Timestamp
+	32, // 13: transactionsgrpc.Deposit.created_at:type_name -> google.protobuf.Timestamp
+	32, // 14: transactionsgrpc.Deposit.updated_at:type_name -> google.protobuf.Timestamp
+	33, // 15: transactionsgrpc.Payout.amount:type_name -> commongrpc.Money
+	35, // 16: transactionsgrpc.Payout.provider:type_name -> commongrpc.Provider
 	3,  // 17: transactionsgrpc.Payout.status:type_name -> transactionsgrpc.PayoutStatus
-	28, // 18: transactionsgrpc.Payout.requested_at:type_name -> google.protobuf.Timestamp
-	28, // 19: transactionsgrpc.Payout.completed_at:type_name -> google.protobuf.Timestamp
-	28, // 20: transactionsgrpc.Payout.failed_at:type_name -> google.protobuf.Timestamp
-	28, // 21: transactionsgrpc.Payout.created_at:type_name -> google.protobuf.Timestamp
-	28, // 22: transactionsgrpc.Payout.updated_at:type_name -> google.protobuf.Timestamp
+	32, // 18: transactionsgrpc.Payout.requested_at:type_name -> google.protobuf.Timestamp
+	32, // 19: transactionsgrpc.Payout.completed_at:type_name -> google.protobuf.Timestamp
+	32, // 20: transactionsgrpc.Payout.failed_at:type_name -> google.protobuf.Timestamp
+	32, // 21: transactionsgrpc.Payout.created_at:type_name -> google.protobuf.Timestamp
+	32, // 22: transactionsgrpc.Payout.updated_at:type_name -> google.protobuf.Timestamp
 	4,  // 23: transactionsgrpc.CreateMerchantResponse.merchant:type_name -> transactionsgrpc.Merchant
 	4,  // 24: transactionsgrpc.GetMerchantResponse.merchant:type_name -> transactionsgrpc.Merchant
-	32, // 25: transactionsgrpc.ListMerchantsRequest.page:type_name -> commongrpc.PaginationRequest
+	36, // 25: transactionsgrpc.ListMerchantsRequest.page:type_name -> commongrpc.PaginationRequest
 	4,  // 26: transactionsgrpc.ListMerchantsResponse.merchants:type_name -> transactionsgrpc.Merchant
-	33, // 27: transactionsgrpc.ListMerchantsResponse.page:type_name -> commongrpc.PaginationResponse
+	37, // 27: transactionsgrpc.ListMerchantsResponse.page:type_name -> commongrpc.PaginationResponse
 	5,  // 28: transactionsgrpc.CreateCustomerResponse.customer:type_name -> transactionsgrpc.Customer
 	5,  // 29: transactionsgrpc.GetCustomerResponse.customer:type_name -> transactionsgrpc.Customer
-	29, // 30: transactionsgrpc.CreateDepositRequest.amount:type_name -> commongrpc.Money
-	30, // 31: transactionsgrpc.CreateDepositRequest.payment_type:type_name -> commongrpc.PaymentType
-	31, // 32: transactionsgrpc.CreateDepositRequest.provider:type_name -> commongrpc.Provider
+	33, // 30: transactionsgrpc.CreateDepositRequest.amount:type_name -> commongrpc.Money
+	34, // 31: transactionsgrpc.CreateDepositRequest.payment_type:type_name -> commongrpc.PaymentType
+	35, // 32: transactionsgrpc.CreateDepositRequest.provider:type_name -> commongrpc.Provider
 	6,  // 33: transactionsgrpc.CreateDepositResponse.deposit:type_name -> transactionsgrpc.Deposit
 	6,  // 34: transactionsgrpc.GetDepositResponse.deposit:type_name -> transactionsgrpc.Deposit
 	6,  // 35: transactionsgrpc.GetDepositByGHLTransactionIDResponse.deposit:type_name -> transactionsgrpc.Deposit
-	29, // 36: transactionsgrpc.CreatePayoutRequest.amount:type_name -> commongrpc.Money
-	31, // 37: transactionsgrpc.CreatePayoutRequest.provider:type_name -> commongrpc.Provider
+	33, // 36: transactionsgrpc.CreatePayoutRequest.amount:type_name -> commongrpc.Money
+	35, // 37: transactionsgrpc.CreatePayoutRequest.provider:type_name -> commongrpc.Provider
 	7,  // 38: transactionsgrpc.CreatePayoutResponse.payout:type_name -> transactionsgrpc.Payout
 	7,  // 39: transactionsgrpc.GetPayoutResponse.payout:type_name -> transactionsgrpc.Payout
 	8,  // 40: transactionsgrpc.MerchantService.CreateMerchant:input_type -> transactionsgrpc.CreateMerchantRequest
@@ -2113,20 +2348,24 @@ var file_transactions_proto_depIdxs = []int32{
 	18, // 45: transactionsgrpc.DepositService.InitiateDeposit:input_type -> transactionsgrpc.CreateDepositRequest
 	20, // 46: transactionsgrpc.DepositService.GetDeposit:input_type -> transactionsgrpc.GetDepositRequest
 	22, // 47: transactionsgrpc.DepositService.GetDepositByGHLTransactionID:input_type -> transactionsgrpc.GetDepositByGHLTransactionIDRequest
-	24, // 48: transactionsgrpc.PayoutService.RequestPayout:input_type -> transactionsgrpc.CreatePayoutRequest
-	26, // 49: transactionsgrpc.PayoutService.GetPayout:input_type -> transactionsgrpc.GetPayoutRequest
-	9,  // 50: transactionsgrpc.MerchantService.CreateMerchant:output_type -> transactionsgrpc.CreateMerchantResponse
-	11, // 51: transactionsgrpc.MerchantService.GetMerchant:output_type -> transactionsgrpc.GetMerchantResponse
-	13, // 52: transactionsgrpc.MerchantService.ListMerchants:output_type -> transactionsgrpc.ListMerchantsResponse
-	15, // 53: transactionsgrpc.CustomerService.CreateCustomer:output_type -> transactionsgrpc.CreateCustomerResponse
-	17, // 54: transactionsgrpc.CustomerService.GetCustomer:output_type -> transactionsgrpc.GetCustomerResponse
-	19, // 55: transactionsgrpc.DepositService.InitiateDeposit:output_type -> transactionsgrpc.CreateDepositResponse
-	21, // 56: transactionsgrpc.DepositService.GetDeposit:output_type -> transactionsgrpc.GetDepositResponse
-	23, // 57: transactionsgrpc.DepositService.GetDepositByGHLTransactionID:output_type -> transactionsgrpc.GetDepositByGHLTransactionIDResponse
-	25, // 58: transactionsgrpc.PayoutService.RequestPayout:output_type -> transactionsgrpc.CreatePayoutResponse
-	27, // 59: transactionsgrpc.PayoutService.GetPayout:output_type -> transactionsgrpc.GetPayoutResponse
-	50, // [50:60] is the sub-list for method output_type
-	40, // [40:50] is the sub-list for method input_type
+	24, // 48: transactionsgrpc.PaymentService.VerifyPayment:input_type -> transactionsgrpc.VerifyPaymentRequest
+	26, // 49: transactionsgrpc.PaymentService.ProcessPaymentWebhook:input_type -> transactionsgrpc.ProcessPaymentWebhookRequest
+	28, // 50: transactionsgrpc.PayoutService.RequestPayout:input_type -> transactionsgrpc.CreatePayoutRequest
+	30, // 51: transactionsgrpc.PayoutService.GetPayout:input_type -> transactionsgrpc.GetPayoutRequest
+	9,  // 52: transactionsgrpc.MerchantService.CreateMerchant:output_type -> transactionsgrpc.CreateMerchantResponse
+	11, // 53: transactionsgrpc.MerchantService.GetMerchant:output_type -> transactionsgrpc.GetMerchantResponse
+	13, // 54: transactionsgrpc.MerchantService.ListMerchants:output_type -> transactionsgrpc.ListMerchantsResponse
+	15, // 55: transactionsgrpc.CustomerService.CreateCustomer:output_type -> transactionsgrpc.CreateCustomerResponse
+	17, // 56: transactionsgrpc.CustomerService.GetCustomer:output_type -> transactionsgrpc.GetCustomerResponse
+	19, // 57: transactionsgrpc.DepositService.InitiateDeposit:output_type -> transactionsgrpc.CreateDepositResponse
+	21, // 58: transactionsgrpc.DepositService.GetDeposit:output_type -> transactionsgrpc.GetDepositResponse
+	23, // 59: transactionsgrpc.DepositService.GetDepositByGHLTransactionID:output_type -> transactionsgrpc.GetDepositByGHLTransactionIDResponse
+	25, // 60: transactionsgrpc.PaymentService.VerifyPayment:output_type -> transactionsgrpc.VerifyPaymentResponse
+	27, // 61: transactionsgrpc.PaymentService.ProcessPaymentWebhook:output_type -> transactionsgrpc.ProcessPaymentWebhookResponse
+	29, // 62: transactionsgrpc.PayoutService.RequestPayout:output_type -> transactionsgrpc.CreatePayoutResponse
+	31, // 63: transactionsgrpc.PayoutService.GetPayout:output_type -> transactionsgrpc.GetPayoutResponse
+	52, // [52:64] is the sub-list for method output_type
+	40, // [40:52] is the sub-list for method input_type
 	40, // [40:40] is the sub-list for extension type_name
 	40, // [40:40] is the sub-list for extension extendee
 	0,  // [0:40] is the sub-list for field type_name
@@ -2143,9 +2382,9 @@ func file_transactions_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_transactions_proto_rawDesc), len(file_transactions_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   24,
+			NumMessages:   28,
 			NumExtensions: 0,
-			NumServices:   4,
+			NumServices:   5,
 		},
 		GoTypes:           file_transactions_proto_goTypes,
 		DependencyIndexes: file_transactions_proto_depIdxs,

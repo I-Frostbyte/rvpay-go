@@ -286,6 +286,39 @@ message GetDepositByGHLTransactionIDResponse {
   Deposit deposit = 1;
 }
 
+// VerifyPaymentRequest requests verification of a payment referenced by a
+// GoHighLevel transaction identifier. This is used by the GHL Custom Payment
+// Provider query endpoint (verify operation).
+message VerifyPaymentRequest {
+  // ghl_transaction_id is the GoHighLevel transaction identifier.
+  string ghl_transaction_id = 1;
+}
+
+// VerifyPaymentResponse returns the payment verification result.
+message VerifyPaymentResponse {
+  // success indicates the payment has succeeded.
+  bool success = 1;
+  // failed indicates the payment has failed.
+  bool failed = 2;
+}
+
+// ProcessPaymentWebhookRequest carries a payment-provider webhook event for
+// business processing. Only one-time payment events relevant to RVPay are
+// processed (e.g. payment.captured); subscription events are not supported.
+message ProcessPaymentWebhookRequest {
+  // event_type is the HighLevel payment event type (e.g. payment.captured).
+  string event_type = 1;
+  // transaction_id is the GoHighLevel transaction identifier.
+  string transaction_id = 2;
+  // charge_id is the GoHighLevel charge identifier.
+  string charge_id = 3;
+  // location_id is the GoHighLevel location identifier.
+  string location_id = 4;
+}
+
+// ProcessPaymentWebhookResponse acknowledges a processed payment webhook.
+message ProcessPaymentWebhookResponse {}
+
 // CreatePayoutRequest requests a payout.
 message CreatePayoutRequest {
   // client_id references the RVPay client record.
@@ -379,6 +412,31 @@ service DepositService {
   rpc GetDepositByGHLTransactionID(GetDepositByGHLTransactionIDRequest) returns (GetDepositByGHLTransactionIDResponse) {
     option (google.api.http) = {
       get : "/v1/public/deposits/by-ghl-transaction/{ghl_transaction_id}"
+    };
+  }
+}
+
+// PaymentService manages the payment-provider backend contract for the GHL
+// Custom Payment Provider integration. It owns payment verification and
+// payment webhook business processing. The GHL-facing transport adapters
+// (in Clients) delegate to this service; payment-domain decisions live here.
+service PaymentService {
+  // VerifyPayment verifies whether a referenced payment has succeeded. It
+  // looks up the deposit by its GoHighLevel transaction identifier and
+  // interprets its lifecycle state.
+  rpc VerifyPayment(VerifyPaymentRequest) returns (VerifyPaymentResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/payments/verify"
+      body : "*"
+    };
+  }
+  // ProcessPaymentWebhook processes a payment-provider webhook event. It
+  // correlates the HighLevel transaction/charge with an RVPay deposit and
+  // records the GHL reference on the deposit.
+  rpc ProcessPaymentWebhook(ProcessPaymentWebhookRequest) returns (ProcessPaymentWebhookResponse) {
+    option (google.api.http) = {
+      post : "/v1/public/payments/webhook"
+      body : "*"
     };
   }
 }

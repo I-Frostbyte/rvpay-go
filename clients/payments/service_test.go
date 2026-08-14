@@ -145,29 +145,29 @@ func (m *mockWebhookEventRepo) GetByIntegrationAndProvider(ctx context.Context, 
 	return sqlc.WebhookEvent{}, repo.ErrNotFound
 }
 
-// fakeTransactionsClient is a fake DepositServiceClient test double.
+// fakeTransactionsClient is a fake PaymentServiceClient test double.
 type fakeTransactionsClient struct {
-	deposits map[string]*transactionsgrpc.Deposit
+	// verifyResults maps a GHL transaction ID to the verification response.
+	verifyResults map[string]*transactionsgrpc.VerifyPaymentResponse
+	// webhookProcessed records whether ProcessPaymentWebhook was called.
+	webhookProcessed bool
 }
 
 func newFakeTransactionsClient() *fakeTransactionsClient {
-	return &fakeTransactionsClient{deposits: make(map[string]*transactionsgrpc.Deposit)}
+	return &fakeTransactionsClient{verifyResults: make(map[string]*transactionsgrpc.VerifyPaymentResponse)}
 }
 
-func (f *fakeTransactionsClient) InitiateDeposit(ctx context.Context, in *transactionsgrpc.CreateDepositRequest, opts ...grpc.CallOption) (*transactionsgrpc.CreateDepositResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "not implemented")
-}
-
-func (f *fakeTransactionsClient) GetDeposit(ctx context.Context, in *transactionsgrpc.GetDepositRequest, opts ...grpc.CallOption) (*transactionsgrpc.GetDepositResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "not implemented")
-}
-
-func (f *fakeTransactionsClient) GetDepositByGHLTransactionID(ctx context.Context, in *transactionsgrpc.GetDepositByGHLTransactionIDRequest, opts ...grpc.CallOption) (*transactionsgrpc.GetDepositByGHLTransactionIDResponse, error) {
-	d, ok := f.deposits[in.GetGhlTransactionId()]
+func (f *fakeTransactionsClient) VerifyPayment(ctx context.Context, in *transactionsgrpc.VerifyPaymentRequest, opts ...grpc.CallOption) (*transactionsgrpc.VerifyPaymentResponse, error) {
+	resp, ok := f.verifyResults[in.GetGhlTransactionId()]
 	if !ok {
-		return nil, status.Error(codes.NotFound, "deposit not found")
+		return nil, status.Error(codes.NotFound, "transaction not found")
 	}
-	return &transactionsgrpc.GetDepositByGHLTransactionIDResponse{Deposit: d}, nil
+	return resp, nil
+}
+
+func (f *fakeTransactionsClient) ProcessPaymentWebhook(ctx context.Context, in *transactionsgrpc.ProcessPaymentWebhookRequest, opts ...grpc.CallOption) (*transactionsgrpc.ProcessPaymentWebhookResponse, error) {
+	f.webhookProcessed = true
+	return &transactionsgrpc.ProcessPaymentWebhookResponse{}, nil
 }
 
 func newTestService() (*Service, *mockConfigRepo, *mockIntegrationRepo, *mockWebhookEventRepo, *fakeTransactionsClient) {
@@ -237,10 +237,7 @@ func TestHandleQuery_Verify_Completed(t *testing.T) {
 		LocationID:     "loc-1",
 		ProviderApiKey: "valid-key",
 	}
-	txClient.deposits["txn-1"] = &transactionsgrpc.Deposit{
-		Id:     "deposit-1",
-		Status: transactionsgrpc.DepositStatus_DEPOSIT_STATUS_COMPLETED,
-	}
+	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{Success: true}
 
 	resp, err := svc.HandleQuery(context.Background(), &QueryRequest{Type: "verify", TransactionID: "txn-1", APIKey: "valid-key"})
 	if err != nil {
@@ -262,10 +259,7 @@ func TestHandleQuery_Verify_Failed(t *testing.T) {
 		LocationID:     "loc-1",
 		ProviderApiKey: "valid-key",
 	}
-	txClient.deposits["txn-1"] = &transactionsgrpc.Deposit{
-		Id:     "deposit-1",
-		Status: transactionsgrpc.DepositStatus_DEPOSIT_STATUS_FAILED,
-	}
+	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{Failed: true}
 
 	resp, err := svc.HandleQuery(context.Background(), &QueryRequest{Type: "verify", TransactionID: "txn-1", APIKey: "valid-key"})
 	if err != nil {
@@ -287,10 +281,7 @@ func TestHandleQuery_Verify_Pending(t *testing.T) {
 		LocationID:     "loc-1",
 		ProviderApiKey: "valid-key",
 	}
-	txClient.deposits["txn-1"] = &transactionsgrpc.Deposit{
-		Id:     "deposit-1",
-		Status: transactionsgrpc.DepositStatus_DEPOSIT_STATUS_INITIATED,
-	}
+	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{}
 
 	resp, err := svc.HandleQuery(context.Background(), &QueryRequest{Type: "verify", TransactionID: "txn-1", APIKey: "valid-key"})
 	if err != nil {
@@ -358,10 +349,7 @@ func TestHandleWebhook_PaymentCaptured(t *testing.T) {
 		ID:     integrationID,
 		Status: sqlc.IntegrationStatusACTIVE,
 	}
-	txClient.deposits["txn-1"] = &transactionsgrpc.Deposit{
-		Id:     "deposit-1",
-		Status: transactionsgrpc.DepositStatus_DEPOSIT_STATUS_COMPLETED,
-	}
+	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{Success: true}
 
 	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"loc-1","transactionId":"txn-1","chargeId":"charge-1"}`))
 	if err != nil {
@@ -381,10 +369,7 @@ func TestHandleWebhook_DuplicateEvent(t *testing.T) {
 		ID:     integrationID,
 		Status: sqlc.IntegrationStatusACTIVE,
 	}
-	txClient.deposits["txn-1"] = &transactionsgrpc.Deposit{
-		Id:     "deposit-1",
-		Status: transactionsgrpc.DepositStatus_DEPOSIT_STATUS_COMPLETED,
-	}
+	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{Success: true}
 
 	body := []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"loc-1","transactionId":"txn-1","chargeId":"charge-1"}`)
 
