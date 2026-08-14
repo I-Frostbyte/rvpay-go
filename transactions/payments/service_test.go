@@ -25,7 +25,8 @@ func TestVerifyPaymentValidation(t *testing.T) {
 		code codes.Code
 	}{
 		{name: "missing request", code: codes.InvalidArgument},
-		{name: "missing transaction id", req: &transactionsgrpc.VerifyPaymentRequest{}, code: codes.InvalidArgument},
+		{name: "missing transaction and charge id", req: &transactionsgrpc.VerifyPaymentRequest{}, code: codes.InvalidArgument},
+		{name: "subscription id rejected", req: &transactionsgrpc.VerifyPaymentRequest{GhlTransactionId: "txn-1", SubscriptionId: "sub-1"}, code: codes.FailedPrecondition},
 	}
 
 	for _, tt := range tests {
@@ -135,9 +136,12 @@ func TestVerifyPaymentNotFound(t *testing.T) {
 
 	depositRepo.EXPECT().GetByGHLTransactionID(gomock.Any(), "unknown-txn").
 		Return(sqlc.Deposit{}, repo.ErrNotFound)
+	depositRepo.EXPECT().GetByGHLChargeID(gomock.Any(), "unknown-charge").
+		Return(sqlc.Deposit{}, repo.ErrNotFound)
 
 	_, err := service.VerifyPayment(context.Background(), &transactionsgrpc.VerifyPaymentRequest{
 		GhlTransactionId: "unknown-txn",
+		GhlChargeId:      "unknown-charge",
 	})
 	if got := status.Code(err); got != codes.NotFound {
 		t.Fatalf("status code = %s, want %s", got, codes.NotFound)
@@ -161,6 +165,76 @@ func TestVerifyPaymentRepositoryError(t *testing.T) {
 	})
 	if got := status.Code(err); got != codes.Internal {
 		t.Fatalf("status code = %s, want %s", got, codes.Internal)
+	}
+}
+
+func TestVerifyPaymentByChargeIDFallback(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	depositRepo := mocks.NewMockDepositRepo(ctrl)
+	service := NewPaymentService(depositRepo, zerolog.Nop())
+
+	// Transaction ID lookup fails; charge ID lookup succeeds.
+	depositRepo.EXPECT().GetByGHLTransactionID(gomock.Any(), "txn-1").
+		Return(sqlc.Deposit{}, repo.ErrNotFound)
+	depositRepo.EXPECT().GetByGHLChargeID(gomock.Any(), "charge-1").
+		Return(sqlc.Deposit{ID: uuid.New(), Status: sqlc.DepositStatusCOMPLETED}, nil)
+
+	resp, err := service.VerifyPayment(context.Background(), &transactionsgrpc.VerifyPaymentRequest{
+		GhlTransactionId: "txn-1",
+		GhlChargeId:      "charge-1",
+	})
+	if err != nil {
+		t.Fatalf("VerifyPayment failed: %v", err)
+	}
+	if !resp.Success {
+		t.Fatal("expected success=true for completed deposit resolved by charge ID")
+	}
+}
+
+func TestVerifyPaymentByChargeIDOnly(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	depositRepo := mocks.NewMockDepositRepo(ctrl)
+	service := NewPaymentService(depositRepo, zerolog.Nop())
+
+	// Only charge ID is provided; transaction ID lookup is skipped.
+	depositRepo.EXPECT().GetByGHLChargeID(gomock.Any(), "charge-1").
+		Return(sqlc.Deposit{ID: uuid.New(), Status: sqlc.DepositStatusFAILED}, nil)
+
+	resp, err := service.VerifyPayment(context.Background(), &transactionsgrpc.VerifyPaymentRequest{
+		GhlChargeId: "charge-1",
+	})
+	if err != nil {
+		t.Fatalf("VerifyPayment failed: %v", err)
+	}
+	if !resp.Failed {
+		t.Fatal("expected failed=true for failed deposit resolved by charge ID")
+	}
+}
+
+func TestVerifyPaymentSubscriptionRejected(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	depositRepo := mocks.NewMockDepositRepo(ctrl)
+	service := NewPaymentService(depositRepo, zerolog.Nop())
+
+	// Subscription-scoped verification is rejected; no repo calls are made.
+	_, err := service.VerifyPayment(context.Background(), &transactionsgrpc.VerifyPaymentRequest{
+		GhlTransactionId: "txn-1",
+		SubscriptionId:   "sub-1",
+	})
+	if got := status.Code(err); got != codes.FailedPrecondition {
+		t.Fatalf("status code = %s, want %s", got, codes.FailedPrecondition)
 	}
 }
 

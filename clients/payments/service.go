@@ -118,21 +118,32 @@ func (s *Service) HandleQuery(ctx context.Context, req *QueryRequest) (*QueryRes
 // decision (transaction lookup, state interpretation) to the Transactions
 // service and maps the result to the HighLevel contract response.
 func (s *Service) handleVerify(ctx context.Context, config sqlc.PaymentProviderConfig, req *QueryRequest) (*QueryResponse, error) {
-	if strings.TrimSpace(req.TransactionID) == "" {
+	if strings.TrimSpace(req.TransactionID) == "" && strings.TrimSpace(req.ChargeID) == "" {
 		return nil, ErrMissingTransactionID
 	}
 
 	// Delegate the payment-domain decision to the Transactions service. The
-	// transport adapter never interprets transaction state.
+	// transport adapter never interprets transaction state. The charge ID is
+	// passed as a fallback lookup key; the subscription ID is passed so the
+	// Transactions service can reject subscription-scoped verifications.
 	resp, err := s.transactionsClient.VerifyPayment(ctx, &transactionsgrpc.VerifyPaymentRequest{
 		GhlTransactionId: req.TransactionID,
+		GhlChargeId:      req.ChargeID,
+		SubscriptionId:   req.SubscriptionID,
 	})
 	if err != nil {
-		if status.Code(err) == codes.NotFound {
+		switch status.Code(err) {
+		case codes.NotFound:
 			return nil, ErrTransactionNotFound
+		case codes.FailedPrecondition:
+			// Subscription-scoped verification is not supported by RVPay.
+			return nil, status.Error(codes.FailedPrecondition, "subscription payments are not supported")
+		case codes.InvalidArgument:
+			return nil, status.Error(codes.InvalidArgument, "invalid payment verification request")
+		default:
+			s.logger.Error().Err(err).Str("transaction_id", req.TransactionID).Msg("could not verify transaction with Transactions service")
+			return nil, status.Error(codes.Internal, "could not verify transaction")
 		}
-		s.logger.Error().Err(err).Str("transaction_id", req.TransactionID).Msg("could not verify transaction with Transactions service")
-		return nil, status.Error(codes.Internal, "could not verify transaction")
 	}
 
 	return &QueryResponse{

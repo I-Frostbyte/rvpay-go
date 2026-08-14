@@ -20,8 +20,9 @@ var (
 	ErrMissingType = status.Error(codes.InvalidArgument, "query type is required")
 	// ErrUnsupportedType is returned when the query operation type is unsupported.
 	ErrUnsupportedType = status.Error(codes.InvalidArgument, "unsupported query type")
-	// ErrMissingTransactionID is returned when the transaction ID is missing.
-	ErrMissingTransactionID = status.Error(codes.InvalidArgument, "transaction_id is required")
+	// ErrMissingTransactionID is returned when both the transaction ID and
+	// charge ID are missing.
+	ErrMissingTransactionID = status.Error(codes.InvalidArgument, "transaction_id or charge_id is required")
 	// ErrTransactionNotFound is returned when the referenced transaction is not found.
 	ErrTransactionNotFound = status.Error(codes.NotFound, "transaction not found")
 	// ErrInvalidPayload is returned when the webhook payload is malformed.

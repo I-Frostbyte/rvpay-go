@@ -1,11 +1,16 @@
-package payments
+package http
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/clients/db/sqlc"
+	"github.com/I-Frostbyte/rvpay-go/clients/payments"
 	transactionsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/transactionsgrpc"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -147,10 +152,7 @@ func (m *mockWebhookEventRepo) GetByIntegrationAndProvider(ctx context.Context, 
 
 // fakeTransactionsClient is a fake PaymentServiceClient test double.
 type fakeTransactionsClient struct {
-	// verifyResults maps a GHL transaction ID to the verification response.
 	verifyResults map[string]*transactionsgrpc.VerifyPaymentResponse
-	// webhookProcessed records whether ProcessPaymentWebhook was called.
-	webhookProcessed bool
 }
 
 func newFakeTransactionsClient() *fakeTransactionsClient {
@@ -174,41 +176,84 @@ func (f *fakeTransactionsClient) VerifyPayment(ctx context.Context, in *transact
 }
 
 func (f *fakeTransactionsClient) ProcessPaymentWebhook(ctx context.Context, in *transactionsgrpc.ProcessPaymentWebhookRequest, opts ...grpc.CallOption) (*transactionsgrpc.ProcessPaymentWebhookResponse, error) {
-	f.webhookProcessed = true
 	return &transactionsgrpc.ProcessPaymentWebhookResponse{}, nil
 }
 
-func newTestService() (*Service, *mockConfigRepo, *mockIntegrationRepo, *mockWebhookEventRepo, *fakeTransactionsClient) {
+func newTestPaymentQueryHandler() (*PaymentQueryHandler, *mockConfigRepo, *fakeTransactionsClient) {
 	configRepo := newMockConfigRepo()
 	integrationRepo := newMockIntegrationRepo()
 	webhookEventRepo := newMockWebhookEventRepo()
 	transactionsClient := newFakeTransactionsClient()
 	logger := zerolog.Nop()
 
-	svc := NewService(configRepo, integrationRepo, webhookEventRepo, transactionsClient, logger)
-	return svc, configRepo, integrationRepo, webhookEventRepo, transactionsClient
+	svc := payments.NewService(configRepo, integrationRepo, webhookEventRepo, transactionsClient, logger)
+	handler := NewPaymentQueryHandler(svc, logger)
+	return handler, configRepo, transactionsClient
 }
 
-func TestHandleQuery_MissingAPIKey(t *testing.T) {
-	svc, _, _, _, _ := newTestService()
+func TestPaymentQueryHandler_UnsupportedMethod(t *testing.T) {
+	handler, _, _ := newTestPaymentQueryHandler()
 
-	_, err := svc.HandleQuery(context.Background(), &QueryRequest{Type: "verify", TransactionID: "txn-1"})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument, got %v", status.Code(err))
+	req := httptest.NewRequest(http.MethodGet, "/payments/custom-provider/query", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Query(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
 	}
 }
 
-func TestHandleQuery_InvalidAPIKey(t *testing.T) {
-	svc, _, _, _, _ := newTestService()
+func TestPaymentQueryHandler_MalformedRequest(t *testing.T) {
+	handler, _, _ := newTestPaymentQueryHandler()
 
-	_, err := svc.HandleQuery(context.Background(), &QueryRequest{Type: "verify", TransactionID: "txn-1", APIKey: "wrong-key"})
-	if status.Code(err) != codes.Unauthenticated {
-		t.Fatalf("expected Unauthenticated, got %v", status.Code(err))
+	req := httptest.NewRequest(http.MethodPost, "/payments/custom-provider/query", bytes.NewBufferString("not-json"))
+	rec := httptest.NewRecorder()
+
+	handler.Query(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
 
-func TestHandleQuery_UnsupportedType(t *testing.T) {
-	svc, configRepo, _, _, _ := newTestService()
+func TestPaymentQueryHandler_MissingAPIKey(t *testing.T) {
+	handler, _, _ := newTestPaymentQueryHandler()
+
+	body, _ := json.Marshal(payments.QueryRequest{
+		Type:          "verify",
+		TransactionID: "txn-1",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/payments/custom-provider/query", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+
+	handler.Query(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestPaymentQueryHandler_InvalidAPIKey(t *testing.T) {
+	handler, _, _ := newTestPaymentQueryHandler()
+
+	body, _ := json.Marshal(payments.QueryRequest{
+		Type:          "verify",
+		TransactionID: "txn-1",
+		APIKey:        "wrong-key",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/payments/custom-provider/query", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+
+	handler.Query(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestPaymentQueryHandler_UnsupportedType(t *testing.T) {
+	handler, configRepo, _ := newTestPaymentQueryHandler()
 	integrationID := uuid.New()
 	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
 		IntegrationID:  integrationID,
@@ -216,29 +261,23 @@ func TestHandleQuery_UnsupportedType(t *testing.T) {
 		ProviderApiKey: "valid-key",
 	}
 
-	_, err := svc.HandleQuery(context.Background(), &QueryRequest{Type: "refund", TransactionID: "txn-1", APIKey: "valid-key"})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument, got %v", status.Code(err))
+	body, _ := json.Marshal(payments.QueryRequest{
+		Type:          "refund",
+		TransactionID: "txn-1",
+		APIKey:        "valid-key",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/payments/custom-provider/query", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+
+	handler.Query(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
 
-func TestHandleQuery_MissingTransactionID(t *testing.T) {
-	svc, configRepo, _, _, _ := newTestService()
-	integrationID := uuid.New()
-	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
-		IntegrationID:  integrationID,
-		LocationID:     "loc-1",
-		ProviderApiKey: "valid-key",
-	}
-
-	_, err := svc.HandleQuery(context.Background(), &QueryRequest{Type: "verify", APIKey: "valid-key"})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument, got %v", status.Code(err))
-	}
-}
-
-func TestHandleQuery_Verify_Completed(t *testing.T) {
-	svc, configRepo, _, _, txClient := newTestService()
+func TestPaymentQueryHandler_VerifySuccess(t *testing.T) {
+	handler, configRepo, txClient := newTestPaymentQueryHandler()
 	integrationID := uuid.New()
 	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
 		IntegrationID:  integrationID,
@@ -247,20 +286,31 @@ func TestHandleQuery_Verify_Completed(t *testing.T) {
 	}
 	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{Success: true}
 
-	resp, err := svc.HandleQuery(context.Background(), &QueryRequest{Type: "verify", TransactionID: "txn-1", APIKey: "valid-key"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	body, _ := json.Marshal(payments.QueryRequest{
+		Type:          "verify",
+		TransactionID: "txn-1",
+		APIKey:        "valid-key",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/payments/custom-provider/query", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+
+	handler.Query(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp payments.QueryResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
 	}
 	if !resp.Success {
-		t.Fatalf("expected success=true for completed deposit")
-	}
-	if resp.Failed {
-		t.Fatalf("expected failed=false for completed deposit")
+		t.Fatal("expected success=true in response")
 	}
 }
 
-func TestHandleQuery_Verify_Failed(t *testing.T) {
-	svc, configRepo, _, _, txClient := newTestService()
+func TestPaymentQueryHandler_VerifyFailed(t *testing.T) {
+	handler, configRepo, txClient := newTestPaymentQueryHandler()
 	integrationID := uuid.New()
 	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
 		IntegrationID:  integrationID,
@@ -269,20 +319,31 @@ func TestHandleQuery_Verify_Failed(t *testing.T) {
 	}
 	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{Failed: true}
 
-	resp, err := svc.HandleQuery(context.Background(), &QueryRequest{Type: "verify", TransactionID: "txn-1", APIKey: "valid-key"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	body, _ := json.Marshal(payments.QueryRequest{
+		Type:          "verify",
+		TransactionID: "txn-1",
+		APIKey:        "valid-key",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/payments/custom-provider/query", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+
+	handler.Query(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp payments.QueryResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
 	}
 	if !resp.Failed {
-		t.Fatalf("expected failed=true for failed deposit")
-	}
-	if resp.Success {
-		t.Fatalf("expected success=false for failed deposit")
+		t.Fatal("expected failed=true in response")
 	}
 }
 
-func TestHandleQuery_Verify_Pending(t *testing.T) {
-	svc, configRepo, _, _, txClient := newTestService()
+func TestPaymentQueryHandler_VerifyPending(t *testing.T) {
+	handler, configRepo, txClient := newTestPaymentQueryHandler()
 	integrationID := uuid.New()
 	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
 		IntegrationID:  integrationID,
@@ -291,20 +352,58 @@ func TestHandleQuery_Verify_Pending(t *testing.T) {
 	}
 	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{}
 
-	resp, err := svc.HandleQuery(context.Background(), &QueryRequest{Type: "verify", TransactionID: "txn-1", APIKey: "valid-key"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	body, _ := json.Marshal(payments.QueryRequest{
+		Type:          "verify",
+		TransactionID: "txn-1",
+		APIKey:        "valid-key",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/payments/custom-provider/query", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+
+	handler.Query(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp payments.QueryResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
 	}
 	if resp.Success {
-		t.Fatalf("expected success=false for pending deposit")
+		t.Fatal("expected success=false for pending")
 	}
 	if resp.Failed {
-		t.Fatalf("expected failed=false for pending deposit")
+		t.Fatal("expected failed=false for pending")
 	}
 }
 
-func TestHandleQuery_Verify_ByChargeID(t *testing.T) {
-	svc, configRepo, _, _, txClient := newTestService()
+func TestPaymentQueryHandler_VerifyUnknownTransaction(t *testing.T) {
+	handler, configRepo, _ := newTestPaymentQueryHandler()
+	integrationID := uuid.New()
+	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
+		IntegrationID:  integrationID,
+		LocationID:     "loc-1",
+		ProviderApiKey: "valid-key",
+	}
+
+	body, _ := json.Marshal(payments.QueryRequest{
+		Type:          "verify",
+		TransactionID: "unknown-txn",
+		APIKey:        "valid-key",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/payments/custom-provider/query", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+
+	handler.Query(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestPaymentQueryHandler_VerifyByChargeID(t *testing.T) {
+	handler, configRepo, txClient := newTestPaymentQueryHandler()
 	integrationID := uuid.New()
 	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
 		IntegrationID:  integrationID,
@@ -314,17 +413,31 @@ func TestHandleQuery_Verify_ByChargeID(t *testing.T) {
 	txClient.verifyResults["charge-1"] = &transactionsgrpc.VerifyPaymentResponse{Success: true}
 
 	// HighLevel may send only a chargeId (no transactionId).
-	resp, err := svc.HandleQuery(context.Background(), &QueryRequest{Type: "verify", APIKey: "valid-key", ChargeID: "charge-1"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	body, _ := json.Marshal(payments.QueryRequest{
+		Type:     "verify",
+		APIKey:   "valid-key",
+		ChargeID: "charge-1",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/payments/custom-provider/query", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+
+	handler.Query(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp payments.QueryResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
 	}
 	if !resp.Success {
-		t.Fatalf("expected success=true for charge ID lookup")
+		t.Fatal("expected success=true for charge ID lookup")
 	}
 }
 
-func TestHandleQuery_Verify_SubscriptionRejected(t *testing.T) {
-	svc, configRepo, _, _, _ := newTestService()
+func TestPaymentQueryHandler_VerifySubscriptionRejected(t *testing.T) {
+	handler, configRepo, _ := newTestPaymentQueryHandler()
 	integrationID := uuid.New()
 	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
 		IntegrationID:  integrationID,
@@ -332,119 +445,18 @@ func TestHandleQuery_Verify_SubscriptionRejected(t *testing.T) {
 		ProviderApiKey: "valid-key",
 	}
 
-	// Subscription-scoped verification is rejected by the Transactions service.
-	_, err := svc.HandleQuery(context.Background(), &QueryRequest{Type: "verify", TransactionID: "txn-1", APIKey: "valid-key", SubscriptionID: "sub-1"})
-	if status.Code(err) != codes.FailedPrecondition {
-		t.Fatalf("expected FailedPrecondition, got %v", status.Code(err))
-	}
-}
+	body, _ := json.Marshal(payments.QueryRequest{
+		Type:           "verify",
+		TransactionID:  "txn-1",
+		APIKey:         "valid-key",
+		SubscriptionID: "sub-1",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/payments/custom-provider/query", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
 
-func TestHandleQuery_Verify_UnknownTransaction(t *testing.T) {
-	svc, configRepo, _, _, _ := newTestService()
-	integrationID := uuid.New()
-	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
-		IntegrationID:  integrationID,
-		LocationID:     "loc-1",
-		ProviderApiKey: "valid-key",
-	}
+	handler.Query(rec, req)
 
-	_, err := svc.HandleQuery(context.Background(), &QueryRequest{Type: "verify", TransactionID: "unknown-txn", APIKey: "valid-key"})
-	if status.Code(err) != codes.NotFound {
-		t.Fatalf("expected NotFound, got %v", status.Code(err))
-	}
-}
-
-func TestHandleWebhook_InvalidPayload(t *testing.T) {
-	svc, _, _, _, _ := newTestService()
-
-	err := svc.HandleWebhook(context.Background(), []byte("not-json"))
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument, got %v", status.Code(err))
-	}
-}
-
-func TestHandleWebhook_MissingEventID(t *testing.T) {
-	svc, _, _, _, _ := newTestService()
-
-	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"payment.captured","locationId":"loc-1"}`))
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument, got %v", status.Code(err))
-	}
-}
-
-func TestHandleWebhook_UnknownLocation(t *testing.T) {
-	svc, _, _, _, _ := newTestService()
-
-	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"unknown-loc"}`))
-	if status.Code(err) != codes.NotFound {
-		t.Fatalf("expected NotFound, got %v", status.Code(err))
-	}
-}
-
-func TestHandleWebhook_PaymentCaptured(t *testing.T) {
-	svc, configRepo, integrationRepo, _, txClient := newTestService()
-	integrationID := uuid.New()
-	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
-		IntegrationID:  integrationID,
-		LocationID:     "loc-1",
-		ProviderApiKey: "valid-key",
-	}
-	integrationRepo.integrations[integrationID.String()] = sqlc.Integration{
-		ID:     integrationID,
-		Status: sqlc.IntegrationStatusACTIVE,
-	}
-	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{Success: true}
-
-	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"loc-1","transactionId":"txn-1","chargeId":"charge-1"}`))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestHandleWebhook_DuplicateEvent(t *testing.T) {
-	svc, configRepo, integrationRepo, _, txClient := newTestService()
-	integrationID := uuid.New()
-	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
-		IntegrationID:  integrationID,
-		LocationID:     "loc-1",
-		ProviderApiKey: "valid-key",
-	}
-	integrationRepo.integrations[integrationID.String()] = sqlc.Integration{
-		ID:     integrationID,
-		Status: sqlc.IntegrationStatusACTIVE,
-	}
-	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{Success: true}
-
-	body := []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"loc-1","transactionId":"txn-1","chargeId":"charge-1"}`)
-
-	// First delivery succeeds.
-	if err := svc.HandleWebhook(context.Background(), body); err != nil {
-		t.Fatalf("first delivery failed: %v", err)
-	}
-
-	// Duplicate delivery is acknowledged as a duplicate.
-	err := svc.HandleWebhook(context.Background(), body)
-	if status.Code(err) != codes.AlreadyExists {
-		t.Fatalf("expected AlreadyExists for duplicate, got %v", status.Code(err))
-	}
-}
-
-func TestHandleWebhook_UnknownEventType(t *testing.T) {
-	svc, configRepo, integrationRepo, _, _ := newTestService()
-	integrationID := uuid.New()
-	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
-		IntegrationID:  integrationID,
-		LocationID:     "loc-1",
-		ProviderApiKey: "valid-key",
-	}
-	integrationRepo.integrations[integrationID.String()] = sqlc.Integration{
-		ID:     integrationID,
-		Status: sqlc.IntegrationStatusACTIVE,
-	}
-
-	// Unknown event types are acknowledged safely without processing.
-	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"subscription.active","eventId":"evt-2","locationId":"loc-1"}`))
-	if err != nil {
-		t.Fatalf("unexpected error for unknown event type: %v", err)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status code = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }

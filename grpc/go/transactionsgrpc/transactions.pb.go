@@ -1636,8 +1636,15 @@ type VerifyPaymentRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// ghl_transaction_id is the GoHighLevel transaction identifier.
 	GhlTransactionId string `protobuf:"bytes,1,opt,name=ghl_transaction_id,json=ghlTransactionId,proto3" json:"ghl_transaction_id,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// ghl_charge_id is the GoHighLevel charge identifier. It is used as a
+	// fallback lookup when the transaction identifier is not present or does
+	// not resolve to a deposit.
+	GhlChargeId string `protobuf:"bytes,2,opt,name=ghl_charge_id,json=ghlChargeId,proto3" json:"ghl_charge_id,omitempty"`
+	// subscription_id is the GoHighLevel subscription identifier. RVPay only
+	// supports one-time payments; a non-empty subscription_id is rejected.
+	SubscriptionId string `protobuf:"bytes,3,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *VerifyPaymentRequest) Reset() {
@@ -1673,6 +1680,20 @@ func (*VerifyPaymentRequest) Descriptor() ([]byte, []int) {
 func (x *VerifyPaymentRequest) GetGhlTransactionId() string {
 	if x != nil {
 		return x.GhlTransactionId
+	}
+	return ""
+}
+
+func (x *VerifyPaymentRequest) GetGhlChargeId() string {
+	if x != nil {
+		return x.GhlChargeId
+	}
+	return ""
+}
+
+func (x *VerifyPaymentRequest) GetSubscriptionId() string {
+	if x != nil {
+		return x.SubscriptionId
 	}
 	return ""
 }
@@ -2177,9 +2198,11 @@ const file_transactions_proto_rawDesc = "" +
 	"#GetDepositByGHLTransactionIDRequest\x12,\n" +
 	"\x12ghl_transaction_id\x18\x01 \x01(\tR\x10ghlTransactionId\"[\n" +
 	"$GetDepositByGHLTransactionIDResponse\x123\n" +
-	"\adeposit\x18\x01 \x01(\v2\x19.transactionsgrpc.DepositR\adeposit\"D\n" +
+	"\adeposit\x18\x01 \x01(\v2\x19.transactionsgrpc.DepositR\adeposit\"\x91\x01\n" +
 	"\x14VerifyPaymentRequest\x12,\n" +
-	"\x12ghl_transaction_id\x18\x01 \x01(\tR\x10ghlTransactionId\"I\n" +
+	"\x12ghl_transaction_id\x18\x01 \x01(\tR\x10ghlTransactionId\x12\"\n" +
+	"\rghl_charge_id\x18\x02 \x01(\tR\vghlChargeId\x12'\n" +
+	"\x0fsubscription_id\x18\x03 \x01(\tR\x0esubscriptionId\"I\n" +
 	"\x15VerifyPaymentResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x16\n" +
 	"\x06failed\x18\x02 \x01(\bR\x06failed\"\xa2\x01\n" +

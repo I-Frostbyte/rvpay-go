@@ -1,21 +1,22 @@
 # RVPay Go — Stage Checkpoint
 
-## Stage 03: HighLevel Registration Lifecycle — COMPLETE
+## Stage 04: Transactions Payment-Provider Backend Contract — COMPLETE
 
-- [x] OAuth service triggers provider registration after callback
-- [x] RegisterProvider: association + config + local persistence
-- [x] Idempotent registration (already-configured location)
-- [x] Retry-safe (integration stays installed on failure)
-- [x] Tests: success, association failure, config failure, already-configured, retry-safe, missing params
-- [x] gofmt, go vet, go test ./clients/... all pass
+- [x] VerifyPayment supports chargeId fallback lookup
+- [x] VerifyPayment rejects subscriptionId (one-time payments only)
+- [x] Protobuf: added ghl_charge_id and subscription_id to VerifyPaymentRequest
+- [x] Clients adapter passes chargeId and subscriptionId to Transactions
+- [x] Clients adapter maps FailedPrecondition/InvalidArgument from Transactions
+- [x] Tests: verify success/failure/pending/unknown, chargeId fallback, chargeId-only, subscription rejected, malformed request, unsupported type, unsupported method, auth failure
+- [x] gofmt, go vet, go test ./transactions/... ./clients/... all pass
 
 ## Files Modified
-- clients/oauth/service.go
-- clients/oauth/errors.go
-- clients/oauth/service_test.go
-- clients/providers/highlevel.go
-- clients/cmd/grpc-service/main.go
-- clients/cmd/grpc-service/runtime_test.go
-- clients/http/oauth_handler_test.go
+- protobuf/transactions.proto
+- transactions/payments/service.go
+- transactions/payments/service_test.go
+- clients/payments/service.go
+- clients/payments/errors.go
+- clients/payments/service_test.go
+- clients/http/payment_query_handler_test.go
 
-## Next: Stage 04 (new Cline task)
+## Next: Stage 05 (new Cline task)

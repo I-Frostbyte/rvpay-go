@@ -37,26 +37,47 @@ func NewPaymentService(
 }
 
 // VerifyPayment verifies whether a referenced payment has succeeded. It
-// looks up the deposit by its GoHighLevel transaction identifier and
-// interprets its lifecycle state. Only the payment-domain status decision is
-// made here; the transport adapter never interprets transaction state.
+// looks up the deposit by its GoHighLevel transaction identifier (or charge
+// identifier as a fallback) and interprets its lifecycle state. Only the
+// payment-domain status decision is made here; the transport adapter never
+// interprets transaction state.
+//
+// The HighLevel Custom Payment Provider contract sends a verification payload
+// containing transactionId, chargeId, and subscriptionId. RVPay only supports
+// one-time payments, so a non-empty subscriptionId is rejected. The deposit
+// is resolved by transactionId first; if that does not resolve, the chargeId
+// is used as a fallback. The authoritative transaction state (deposit status)
+// determines the verification result; success is never inferred merely from
+// the existence of a chargeId or a received webhook.
 func (s *Impl) VerifyPayment(ctx context.Context, req *transactionsgrpc.VerifyPaymentRequest) (*transactionsgrpc.VerifyPaymentResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "verify payment request is required")
 	}
 
 	ghlTransactionID := strings.TrimSpace(req.GetGhlTransactionId())
-	if ghlTransactionID == "" {
-		return nil, status.Error(codes.InvalidArgument, "ghl_transaction_id is required")
+	ghlChargeID := strings.TrimSpace(req.GetGhlChargeId())
+	subscriptionID := strings.TrimSpace(req.GetSubscriptionId())
+
+	// RVPay only supports one-time payments. A non-empty subscriptionId
+	// indicates a subscription-scoped verification, which is not supported.
+	if subscriptionID != "" {
+		return nil, status.Error(codes.FailedPrecondition, "subscription payments are not supported")
 	}
 
-	deposit, err := s.depositRepo.GetByGHLTransactionID(ctx, ghlTransactionID)
+	if ghlTransactionID == "" && ghlChargeID == "" {
+		return nil, status.Error(codes.InvalidArgument, "ghl_transaction_id or ghl_charge_id is required")
+	}
+
+	deposit, err := s.resolveDeposit(ctx, ghlTransactionID, ghlChargeID)
 	if err != nil {
 		switch {
 		case errors.Is(err, repo.ErrNotFound):
 			return nil, status.Error(codes.NotFound, "transaction not found")
 		default:
-			s.logger.Error().Err(err).Str("ghl_transaction_id", ghlTransactionID).Msg("could not verify payment")
+			s.logger.Error().Err(err).
+				Str("ghl_transaction_id", ghlTransactionID).
+				Str("ghl_charge_id", ghlChargeID).
+				Msg("could not verify payment")
 			return nil, status.Error(codes.Internal, "could not verify payment")
 		}
 	}
@@ -72,6 +93,35 @@ func (s *Impl) VerifyPayment(ctx context.Context, req *transactionsgrpc.VerifyPa
 		// INITIATED and PROCESSING are pending.
 		return &transactionsgrpc.VerifyPaymentResponse{}, nil
 	}
+}
+
+// resolveDeposit resolves a deposit by its GoHighLevel transaction identifier
+// first, then by its charge identifier as a fallback. The transaction
+// identifier is the primary correlation key; the charge identifier is used
+// when the transaction identifier is absent or does not resolve.
+func (s *Impl) resolveDeposit(ctx context.Context, ghlTransactionID, ghlChargeID string) (sqlc.Deposit, error) {
+	if ghlTransactionID != "" {
+		deposit, err := s.depositRepo.GetByGHLTransactionID(ctx, ghlTransactionID)
+		if err == nil {
+			return deposit, nil
+		}
+		if !errors.Is(err, repo.ErrNotFound) {
+			return sqlc.Deposit{}, err
+		}
+		// Transaction ID not found; fall through to charge ID lookup.
+	}
+
+	if ghlChargeID != "" {
+		deposit, err := s.depositRepo.GetByGHLChargeID(ctx, ghlChargeID)
+		if err == nil {
+			return deposit, nil
+		}
+		if !errors.Is(err, repo.ErrNotFound) {
+			return sqlc.Deposit{}, err
+		}
+	}
+
+	return sqlc.Deposit{}, repo.ErrNotFound
 }
 
 // ProcessPaymentWebhook processes a payment-provider webhook event. It
