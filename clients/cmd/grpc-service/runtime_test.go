@@ -23,7 +23,7 @@ func newRuntimeMux(t *testing.T) *http.ServeMux {
 	// the routes themselves must be reachable. We use the real service
 	// constructors with nil repos to prove wiring compiles and routes exist.
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", ""))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "", nil))
 
 	oauthService := oauth.NewService(nil, nil, nil, nil, nil, registry, "https://example.com/callback", zerolog.Nop())
 	webhookService := webhooks.NewService(nil, nil, nil, nil, registry, zerolog.Nop())

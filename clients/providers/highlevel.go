@@ -24,6 +24,7 @@ type HighLevelProvider struct {
 	userInfoURL      string
 	scopes           []string
 	httpClient       *http.Client
+	paymentProvider  PaymentProviderClient
 }
 
 // NewHighLevelProvider creates a new HighLevel provider. webhookPublicKey is
@@ -31,7 +32,11 @@ type HighLevelProvider struct {
 // signatures (HIGHLEVEL_WEBHOOK_PUBLIC_KEY). It is public cryptographic
 // material, not a private credential, and must not be confused with the OAuth
 // client secret.
-func NewHighLevelProvider(clientID, clientSecret, redirectURI, webhookPublicKey string) *HighLevelProvider {
+//
+// paymentProvider is the Custom Payment Provider client used for outbound
+// HighLevel provider registration/configuration calls. It may be nil if the
+// provider does not support Custom Payment Provider operations.
+func NewHighLevelProvider(clientID, clientSecret, redirectURI, webhookPublicKey string, paymentProvider PaymentProviderClient) *HighLevelProvider {
 	return &HighLevelProvider{
 		clientID:         clientID,
 		clientSecret:     clientSecret,
@@ -43,7 +48,8 @@ func NewHighLevelProvider(clientID, clientSecret, redirectURI, webhookPublicKey 
 		scopes:           []string{"read", "write"},
 		// A single shared client is reused across all provider calls so HTTP
 		// connections are pooled and reused rather than recreated per request.
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		httpClient:      &http.Client{Timeout: 10 * time.Second},
+		paymentProvider: paymentProvider,
 	}
 }
 
@@ -56,19 +62,25 @@ func (p *HighLevelProvider) Name() string {
 }
 
 func (p *HighLevelProvider) Capabilities() []Capability {
-	return []Capability{
+	caps := []Capability{
 		CapabilityOAuth,
 		CapabilityWebhooks,
 		CapabilityTokenRefresh,
 		CapabilityInstallation,
 		CapabilityUninstallation,
 	}
+	if p.paymentProvider != nil {
+		caps = append(caps, CapabilityPaymentProvider)
+	}
+	return caps
 }
 
 func (p *HighLevelProvider) HasCapability(capability Capability) bool {
 	switch capability {
 	case CapabilityOAuth, CapabilityWebhooks, CapabilityTokenRefresh, CapabilityInstallation, CapabilityUninstallation:
 		return true
+	case CapabilityPaymentProvider:
+		return p.paymentProvider != nil
 	default:
 		return false
 	}
@@ -80,6 +92,10 @@ func (p *HighLevelProvider) OAuthProvider() OAuthProvider {
 
 func (p *HighLevelProvider) WebhookProvider() WebhookProvider {
 	return NewHighLevelWebhookProvider(p.webhookPublicKey)
+}
+
+func (p *HighLevelProvider) PaymentProvider() PaymentProviderClient {
+	return p.paymentProvider
 }
 
 func (p *HighLevelProvider) GenerateAuthorizationURL(ctx context.Context, state string, redirectURI string) (string, error) {

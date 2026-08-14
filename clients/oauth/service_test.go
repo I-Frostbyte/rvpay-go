@@ -486,7 +486,7 @@ func TestAuthorizationURL(t *testing.T) {
 	}
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret"))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret", nil))
 
 	svc := NewService(
 		newMockIntegrationRepo(),
@@ -532,7 +532,7 @@ func TestAuthorizationURLDisabledPlatform(t *testing.T) {
 	}
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret"))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret", nil))
 
 	svc := NewService(
 		newMockIntegrationRepo(),
@@ -564,7 +564,7 @@ func TestBeginAuthorization(t *testing.T) {
 	platformRepo.platforms[platformID.String()] = sqlc.Platform{ID: platformID, Name: "HighLevel", Slug: "highlevel", Enabled: true}
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", ""))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "", nil))
 
 	svc := NewService(
 		newMockIntegrationRepo(),
@@ -615,7 +615,7 @@ func TestBeginAuthorizationInactiveClient(t *testing.T) {
 	platformRepo.platforms[platformID.String()] = sqlc.Platform{ID: platformID, Name: "HighLevel", Slug: "highlevel", Enabled: true}
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", ""))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "", nil))
 
 	svc := NewService(
 		newMockIntegrationRepo(),

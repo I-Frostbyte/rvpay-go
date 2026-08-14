@@ -98,7 +98,11 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	paymentProviderConfigRepo := repo.NewPaymentProviderConfigRepo(clientsRepo.Do())
 
 	providerRegistry := providers.NewProviderRegistry()
-	highLevelProvider := providers.NewHighLevelProvider(cfg.HighLevel.ClientID, cfg.HighLevel.ClientSecret, cfg.HighLevel.RedirectURI, cfg.HighLevel.WebhookPublicKey)
+	// The HighLevel Custom Payment Provider client makes authenticated outbound
+	// calls to HighLevel for provider registration/configuration. The base URL
+	// comes from configuration (HIGHLEVEL_API_BASE_URL); it is never hard-coded.
+	highLevelPaymentProvider := providers.NewHighLevelPaymentProviderClient(cfg.HighLevel.APIBaseURL, nil)
+	highLevelProvider := providers.NewHighLevelProvider(cfg.HighLevel.ClientID, cfg.HighLevel.ClientSecret, cfg.HighLevel.RedirectURI, cfg.HighLevel.WebhookPublicKey, highLevelPaymentProvider)
 	providerRegistry.Register(highLevelProvider)
 	logger.Info().Msg("providers registered successfully")
 

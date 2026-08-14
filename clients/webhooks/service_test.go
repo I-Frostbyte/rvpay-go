@@ -276,7 +276,7 @@ func TestProcessWebhookInvalidSignature(t *testing.T) {
 	t.Parallel()
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret"))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret", nil))
 
 	svc := NewService(
 		newMockWebhookIntegrationRepo(),
@@ -298,7 +298,7 @@ func TestRegisterWebhookIntegrationNotFound(t *testing.T) {
 	t.Parallel()
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret"))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret", nil))
 
 	svc := NewService(
 		newMockWebhookIntegrationRepo(),
@@ -319,7 +319,7 @@ func TestUnregisterWebhookNotFound(t *testing.T) {
 	t.Parallel()
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret"))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret", nil))
 
 	svc := NewService(
 		newMockWebhookIntegrationRepo(),
