@@ -1,0 +1,21 @@
+# RVPay Go — Stage Checkpoint
+
+## Stage 03: HighLevel Registration Lifecycle — COMPLETE
+
+- [x] OAuth service triggers provider registration after callback
+- [x] RegisterProvider: association + config + local persistence
+- [x] Idempotent registration (already-configured location)
+- [x] Retry-safe (integration stays installed on failure)
+- [x] Tests: success, association failure, config failure, already-configured, retry-safe, missing params
+- [x] gofmt, go vet, go test ./clients/... all pass
+
+## Files Modified
+- clients/oauth/service.go
+- clients/oauth/errors.go
+- clients/oauth/service_test.go
+- clients/providers/highlevel.go
+- clients/cmd/grpc-service/main.go
+- clients/cmd/grpc-service/runtime_test.go
+- clients/http/oauth_handler_test.go
+
+## Next: Stage 04 (new Cline task)

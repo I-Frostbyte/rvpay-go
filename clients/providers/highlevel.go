@@ -53,6 +53,25 @@ func NewHighLevelProvider(clientID, clientSecret, redirectURI, webhookPublicKey 
 	}
 }
 
+// NewHighLevelProviderWithURLs creates a new HighLevel provider with
+// configurable OAuth and user-info URLs. It is primarily intended for tests
+// that need to mock the HighLevel API endpoints. The URLs must be valid HTTP
+// or HTTPS URLs.
+func NewHighLevelProviderWithURLs(clientID, clientSecret, redirectURI, webhookPublicKey, authURL, tokenURL, userInfoURL string, paymentProvider PaymentProviderClient) *HighLevelProvider {
+	return &HighLevelProvider{
+		clientID:         clientID,
+		clientSecret:     clientSecret,
+		webhookPublicKey: webhookPublicKey,
+		redirectURI:      redirectURI,
+		authURL:          authURL,
+		tokenURL:         tokenURL,
+		userInfoURL:      userInfoURL,
+		scopes:           []string{"read", "write"},
+		httpClient:       &http.Client{Timeout: 10 * time.Second},
+		paymentProvider:  paymentProvider,
+	}
+}
+
 func (p *HighLevelProvider) ID() string {
 	return "highlevel"
 }

@@ -236,8 +236,10 @@ func newTestOAuthHandler(t *testing.T) (*OAuthHandler, *testOAuthStateRepo, *tes
 		clientRepo,
 		platformRepo,
 		stateRepo,
+		nil,
 		registry,
 		"https://example.com/callback",
+		oauth.ProviderConfigSettings{},
 		zerolog.Nop(),
 	)
 

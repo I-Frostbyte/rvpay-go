@@ -110,7 +110,24 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	platformsService := service.NewPlatformsServiceImpl(platformRepo, logger)
 	integrationsService := service.NewIntegrationsServiceImpl(integrationRepo, clientRepo, platformRepo, oauthTokenRepo, webhookSubscriptionRepo, logger)
 
-	oauthService := oauth.NewService(integrationRepo, oauthTokenRepo, clientRepo, platformRepo, oauthStateRepo, providerRegistry, cfg.HighLevel.RedirectURI, logger)
+	oauthService := oauth.NewService(
+		integrationRepo,
+		oauthTokenRepo,
+		clientRepo,
+		platformRepo,
+		oauthStateRepo,
+		paymentProviderConfigRepo,
+		providerRegistry,
+		cfg.HighLevel.RedirectURI,
+		oauth.ProviderConfigSettings{
+			Name:        cfg.HighLevel.ProviderName,
+			Description: cfg.HighLevel.ProviderDescription,
+			ImageURL:    cfg.HighLevel.ProviderImageURL,
+			PaymentsURL: cfg.HighLevel.PaymentURL,
+			QueryURL:    cfg.HighLevel.QueryURL,
+		},
+		logger,
+	)
 	webhookService := webhooks.NewService(integrationRepo, webhookSubscriptionRepo, webhookEventRepo, platformRepo, providerRegistry, logger)
 	oauthHandler := clientshttp.NewOAuthHandler(oauthService, logger)
 	webhookHandler := clientshttp.NewWebhookHandler(webhookService, logger)
