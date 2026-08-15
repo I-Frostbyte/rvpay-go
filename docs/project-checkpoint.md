@@ -1,9 +1,9 @@
 # RVPay Project Checkpoint
 
-Document Version: 2.3
+Document Version: 2.4
 Status: Handoff / Navigation Document
 System: RVPay
-Updated: 2026-08-11 (after Platform Agent 12 — Final Review)
+Updated: 2026-08-15 (after Agent 01 — GHL Custom Payment Provider Stage 10)
 
 ## Authoritative Files
 
@@ -62,7 +62,7 @@ A fresh Cline session must read these before making changes:
 
 The repository is a Go microservices monorepo with four runnable services plus
 shared platform infrastructure. The cumulative implementation through Platform
-12 is:
+12 and Agent 01 (GHL Custom Payment Provider) is:
 
 - **Foundation** — COMPLETE: domain model, repository layout, protobuf
   strategy, migration plan (`docs/00-foundation`, `docs/`).
@@ -87,26 +87,57 @@ shared platform infrastructure. The cumulative implementation through Platform
   exists and is wired only in the legacy Deposits service.
 - **OAuth / Webhooks** — IMPLEMENTED in Clients (HighLevel OAuth + webhooks)
   and legacy Integrations.
-- **GHL Custom Payment Provider** — IMPLEMENTED in Clients: payment query
-  endpoint (`POST /payments/custom-provider/query`, verify operation),
-  payment-provider webhook (`POST /payments/custom-provider/webhook`,
-  payment.captured, idempotent), per-integration provider configuration
-  (`payment_provider_configs` table), and transaction correlation with RVPay
-  deposits via the Transactions service (`GetDepositByGHLTransactionID` RPC).
-  One-time payments only; no subscriptions or refunds.
+- **GHL Custom Payment Provider** — CORRECTED AND COMPLETED via Agent 01
+  (Stages 00–10). Clients owns GHL integration and provider registration.
+  Transactions owns payment domain, payment state, pawaPay interaction.
+  See detailed breakdown below.
 - **Background processing / queues** — PLANNED/NOT PRESENT. No workers, no
   polling, no reconciliation jobs exist.
+
+## GHL Custom Payment Provider — Corrected Architecture
+
+The corrective Agent 01 established the following ownership boundaries:
+
+### Clients Service (GHL Integration Boundary)
+
+Clients owns:
+- HighLevel Marketplace integration
+- HighLevel OAuth (`/oauth/callback`)
+- HighLevel provider registration (outbound `POST /payments/custom-provider/provider`)
+- HighLevel provider configuration (outbound `POST /payments/custom-provider/connect`)
+- HighLevel provider lifecycle (association, configuration, disconnection)
+- HighLevel Marketplace webhook (`/webhooks/highlevel`)
+- GHL transport adapters for payment query/webhook
+
+### Transactions Service (Payment Domain)
+
+Transactions owns:
+- Payment state and lifecycle
+- Payment initiation, verification, and status
+- pawaPay execution (behind provider boundary)
+- Payment reconciliation
+- HighLevel transaction correlation (ghlTransactionId ↔ RVPay deposits)
+- Payment-provider webhook business processing (`/payments/custom-provider/webhook`)
+- Payment query verification (`/payments/custom-provider/query`)
+
+### Key Boundaries
+- HighLevel never calls pawaPay directly
+- Clients never calls pawaPay directly
+- GHL payment queries/webhooks flow through a thin Clients HTTP adapter → Transactions via gRPC
+- Provider API key is distinct from OAuth credentials and pawaPay API key
+- One-time payment only (`supportsSubscriptionSchedule = false`)
 
 ## Service Status
 
 ### Clients Service
 
 - **Implementation status**: COMPLETE, production-reviewed (READY WITH
-  WARNINGS).
+  WARNINGS). GHL Custom Payment Provider integration corrected and completed.
 - **Major components**: Clients, Platforms, Integrations, OAuth, Webhooks via
   a unified Provider interface (`clients/providers`); gRPC + gateway;
   PostgreSQL; zerolog; config; Docker; tests.
 - **Database**: COMPLETE — `clients/db` (migrations, query, sqlc, repo).
+  Includes `payment_provider_configs` table for per-integration GHL provider config.
 - **Protobuf**: COMPLETE — `clientsgrpc` (`ClientsService`,
   `PlatformsService`, `IntegrationsService`).
 - **Repository**: COMPLETE — `clients/db/repo` (sqlc-encapsulating repos).
@@ -114,10 +145,19 @@ shared platform infrastructure. The cumulative implementation through Platform
 - **OAuth**: COMPLETE — HighLevel OAuth flow (`clients/oauth`); token
   encryption-at-rest hardening flagged in production review.
 - **Webhook**: COMPLETE — HighLevel webhook ingestion/persistence
-  (`clients/webhooks`); signature verification not yet enforced.
+  (`clients/webhooks`); signature verification enforced via
+  `HIGHLEVEL_WEBHOOK_PUBLIC_KEY` (Ed25519).
+- **GHL Registration**: COMPLETE — outbound HighLevel Custom Payment Provider
+  API client (`clients/providers/highlevel.go`) supporting
+  `CreateProviderAssociation`, `CreateProviderConfig`, `FetchProviderConfig`,
+  `DisconnectProvider`. Integrated into OAuth lifecycle.
+- **GHL Payment Endpoints**: COMPLETE — `POST /payments/custom-provider/query`
+  (verify) and `POST /payments/custom-provider/webhook` (payment.captured).
+  Thin HTTP adapters that delegate to Transactions via gRPC.
 - **Runtime**: COMPLETE — `clients/cmd/grpc-service/main.go` (gRPC + gateway +
   healthz + graceful shutdown + observability).
-- **Tests**: COMPLETE — service tests + gateway wiring tests; race-clean.
+- **Tests**: COMPLETE — service tests + gateway wiring tests + provider tests;
+  race-clean.
 
 ### Transactions Service
 
@@ -131,7 +171,8 @@ shared platform infrastructure. The cumulative implementation through Platform
 - **Merchants**: COMPLETE — `transactions/merchants`.
 - **Customers**: COMPLETE — `transactions/customers`.
 - **Deposits**: COMPLETE — `transactions/deposits` (initiate/get; provider
-  execution deferred).
+  execution deferred). Includes `GetDepositByGHLTransactionID` RPC for
+  HighLevel transaction correlation.
 - **Payouts**: COMPLETE — `transactions/payouts` (request/get; not
   customer-scoped).
 - **Runtime**: COMPLETE — `transactions/cmd/grpc-service/main.go` (gRPC +
@@ -148,9 +189,12 @@ shared platform infrastructure. The cumulative implementation through Platform
   (`docs/platform-http-gateway-review.md`).
 - **Platform 04 — Common Packages**: COMPLETE
   (`docs/platform-common-packages-review.md`).
-- **Platform 05 — CI/CD**: COMPLETE (`docs/platform-ci-cd-review.md`).
-- **Platform 06 — Docker**: COMPLETE (`docs/platform-docker-review.md`).
-- **Platform 07 — Render**: COMPLETE (`docs/platform-render-review.md`).
+- **Platform 05 — CI/CD**: COMPLETE
+  (`docs/platform-ci-cd-review.md`).
+- **Platform 06 — Docker**: COMPLETE
+  (`docs/platform-docker-review.md`).
+- **Platform 07 — Render**: COMPLETE
+  (`docs/platform-render-review.md`).
 - **Platform 08 — Documentation**: COMPLETE
   (`docs/platform-documentation-review.md`).
 - **Platform 09 — Observability**: COMPLETE
@@ -160,7 +204,7 @@ shared platform infrastructure. The cumulative implementation through Platform
 - **Platform 11 — Performance**: COMPLETE
   (`docs/platform-performance-review.md`).
 - **Platform 12 — Final Review**: COMPLETE
-  (`docs/platform-final-review.md`).
+  (`docs/platform-final-review.md`); platform sequence finished.
 
 ## Agent Progress
 
@@ -169,38 +213,29 @@ shared platform infrastructure. The cumulative implementation through Platform
 | Foundation | 00-foundation (01–04) | COMPLETE | domain, layout, protobuf strategy, migration plan |
 | Clients | 01–12 | COMPLETE | production-reviewed (READY WITH WARNINGS) |
 | Transactions | 01–13 | COMPLETE | production-reviewed (READY WITH CONDITIONS) |
-| Platform | 01 Repository Audit | COMPLETE | `docs/platform-repository-audit.md` |
-| Platform | 02 Protobuf Generation | COMPLETE | `docs/platform-protobuf-generation-review.md` |
-| Platform | 03 HTTP Gateway | COMPLETE | `docs/platform-http-gateway-review.md` |
-| Platform | 04 Common Packages | COMPLETE | `docs/platform-common-packages-review.md` |
-| Platform | 05 CI/CD | COMPLETE | `docs/platform-ci-cd-review.md` |
-| Platform | 06 Docker | COMPLETE | `docs/platform-docker-review.md` |
-| Platform | 07 Render | COMPLETE | `docs/platform-render-review.md` |
-| Platform | 08 Documentation | COMPLETE | `docs/platform-documentation-review.md` |
-| Platform | 09 Observability | COMPLETE | `docs/platform-observability-review.md` |
-| Platform | 10 Security | COMPLETE | `docs/platform-security-review.md` |
-| Platform | 11 Performance | COMPLETE | `docs/platform-performance-review.md` |
-| Platform | 12 Final Review | COMPLETE | `docs/platform-final-review.md`; platform sequence finished |
-| Clients | 00 GHL Custom Payment Provider | COMPLETE | GHL Custom Payment Provider backend integration (query endpoint, payment webhook, provider config, transaction correlation) |
+| Platform | 01–12 | COMPLETE | platform sequence finished |
+| Clients | 01 GHL Custom Payment Provider (Stages 00–10) | COMPLETE | Corrective and completion agent. Architecture corrected (Clients = GHL integration; Transactions = payment domain). Provider registration, query endpoint, payment webhook, transaction correlation, idempotency, Render readiness all implemented. |
 
 ## Current Work
 
-The repository confirms Platform 12 is complete
-(`docs/platform-final-review.md` exists; the platform agent sequence 01–12 is
-finished).
+The GHL Custom Payment Provider corrective agent (Agent 01, Stages 00–10)
+is complete. Architecture ownership is corrected:
 
-**Platform 12 — Final Review — COMPLETE**
-
-The platform agent sequence is complete. No further platform agent remains.
+- **Clients** = GHL integration boundary (OAuth, registration, provider config, transport adapters)
+- **Transactions** = payment domain (payment state, verification, pawaPay, webhook business logic)
 
 ## Next Action
 
-The platform agent sequence (01–12) is complete. The next work is the deferred
-integration-boundary items documented in
-`docs/platform-final-review.md` §24 and `docs/transactions-production-review.md`
-(auth, cross-service `client_id` validation, provider execution/status
-reconciliation, OAuth token encryption, webhook dedup) — to be planned as a
-new phase after explicit acceptance.
+The GHL Custom Payment Provider integration is complete. The system is ready
+for real HighLevel test location connectivity (see `clients/docs/connectivity-checklist.md`).
+
+Deferred items (not part of this agent):
+- Authentication/authorization middleware
+- Provider execution/status reconciliation in Transactions
+- OAuth token encryption hardening
+- Cross-service `client_id` validation
+- Metrics/tracing
+- AWS deployment
 
 ## Rules for Continuing
 
@@ -233,18 +268,18 @@ new phase after explicit acceptance.
   `docs/transactions-production-review.md`.
 - Clients production review documented HIGH/MEDIUM findings (OAuth token
   encryption at rest, redirect URI config wiring, webhook dedup) — see
-  `clients/docs/production-readiness-review.md`. The redirect URI config wiring
-  finding was addressed by Platform 10 (SEC-02: configured `HIGHLEVEL_REDIRECT_URI`
-  is now used by the OAuth service).
+  `clients/docs/production-readiness-review.md`.
 - No authentication/authorization middleware in any service (Platform 10).
-- No metrics/tracing/request-ID-based distributed tracing (request IDs exist;
-  metrics/tracing deferred — Platform 11/12).
 - Render free tier includes one managed PostgreSQL; the Blueprint defines three
   databases (one per service), which requires a paid plan (documented fallback
   in `deploy/render/README.md`).
 - OCI GitHub Actions pipeline (`deploy.yml`) is intentionally disabled.
 - Legacy `deposits/` and `integrations/` services remain runnable and are not
   deleted; they retain their pre-existing (non-shared) infrastructure.
+- GHL Custom Payment Provider integration has NOT been tested against a real
+  HighLevel test location. All tests use mocked HTTP endpoints.
+- pawaPay production connectivity has NOT been tested. All pawaPay boundaries
+  are behind mocked interfaces.
 
 ## Important Decisions
 
@@ -286,58 +321,46 @@ new phase after explicit acceptance.
 - **Agent files are the working instructions.** Keep all `agents/` files; they
   are the directives the platform agents execute, and they must not be
   deleted or "cleaned up" during implementation.
+- **Architecture boundary: Clients = GHL integration; Transactions = payment domain.**
+  This boundary must not be compromised. Clients never calls pawaPay directly.
+  GHL payment queries/webhooks use thin Clients HTTP adapters that delegate
+  business logic to Transactions via gRPC.
 
 ## Recently Completed
 
-- Clients service implementation completed through its final production
-  review (`clients/docs/production-readiness-review.md`).
-- Transactions service implementation completed through its final production
-  review (`docs/transactions-production-review.md`).
-- Platform repository audit completed (`docs/platform-repository-audit.md`).
-- Platform protobuf generation completed
-  (`docs/platform-protobuf-generation-review.md`).
-- Platform HTTP gateway completed (`docs/platform-http-gateway-review.md`).
-- Platform common packages completed (`docs/platform-common-packages-review.md`).
-- Platform CI/CD completed (`docs/platform-ci-cd-review.md`).
-- Platform Docker configuration completed (`docs/platform-docker-review.md`).
-- Platform Render configuration completed (`docs/platform-render-review.md`).
-- Platform documentation completed (`docs/platform-documentation-review.md`).
-- Platform observability completed (`docs/platform-observability-review.md`).
-- Platform security completed (`docs/platform-security-review.md`).
-- Platform performance completed (`docs/platform-performance-review.md`).
-- Platform final review completed (`docs/platform-final-review.md`).
+- **GHL Custom Payment Provider Agent 01 (Stages 00–10) — COMPLETE.**
+  Architecture corrected: Clients now owns GHL integration and provider
+  registration; Transactions now owns payment domain. HighLevel provider
+  registration client implemented (CreateProviderAssociation,
+  CreateProviderConfig, FetchProviderConfig, DisconnectProvider). Payment
+  query endpoint (`POST /payments/custom-provider/query`) and payment webhook
+  endpoint (`POST /payments/custom-provider/webhook`) implemented as thin
+  Clients adapters delegating to Transactions. Persistent webhook idempotency
+  via `webhook_events` table unique constraint. Provider configuration stored
+  in `payment_provider_configs` table. Required HighLevel scopes documented.
+  Operator connectivity checklist created
+  (`clients/docs/connectivity-checklist.md`). Render deployment ready
+  (no hard-coded hostnames; all URLs configurable via env vars).
+  `go fmt`, `go vet`, `go test`, `go build`, `git diff --check` all pass.
 
 ## Current Repository State
 
-- `git status --short`: clean (the separately-updated `agents/project-context.md`
-  has been committed by the user).
-- `git log --oneline -10` (HEAD on `platform-cleanup`):
-  - `7309c13` (HEAD) — project-context update (committed by user)
-  - `55b3e4a 09-observability`
-  - `0c0b65a 08-documentation`
-  - `c2c13b8 07-render`
-  - `a2c3d73 06-docker`
-  - `f2b341d 05-ci-cd`
-  - `397b41f 04-common-packages`
-  - `a020431 03-http-gateway`
-  - `59f9616 project-checkpoint and chat change`
-  - `5a79f21 01-repsitory-audit`
+- `git status --short`: modified files from `go fmt` formatting
 - Generated files (`grpc/go/*`, `*sqlc*`, `*mocks*`) are committed and should
   only change via regeneration; do not edit by hand.
 
 ## New Cline Session Handoff
 
-The platform agent sequence has finished. A new Cline session should read
-README.md, agents/project-context.md, docs/project-checkpoint.md, and the
-relevant foundation/platform documents (docs/domain-model.md,
-docs/repository-layout.md, docs/protobuf-strategy.md, docs/migration-plan.md)
-before starting any new phase (see Next Action). Do not rely on the previous
-Cline conversation. Treat the repository and these documents as the source of
-truth.
+The GHL Custom Payment Provider corrective agent is complete. A new Cline
+session should read README.md, agents/project-context.md,
+docs/project-checkpoint.md, and the relevant foundation documents before
+starting any new phase. Do not rely on the previous Cline conversation.
+Treat the repository and these documents as the source of truth.
 
 Current completed endpoint:
 
-**Platform 12 — Final Review** (platform sequence complete)
+**GHL Custom Payment Provider Integration — CORRECTED AND COMPLETED**
+(Clients = GHL integration; Transactions = payment domain)
 
 ## Temporary Free-Tier Database Migration Workaround
 

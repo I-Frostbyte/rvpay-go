@@ -3,8 +3,8 @@ package integrations
 import (
 	"fmt"
 
-	"github.com/I-Frostbyte/rvpay-go/integrations/db/sqlc"
 	integrationsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/integrationsgrpc"
+	"github.com/I-Frostbyte/rvpay-go/integrations/db/sqlc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
