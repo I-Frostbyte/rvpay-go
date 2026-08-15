@@ -912,7 +912,8 @@ func newRegistrationTestService(t *testing.T, paymentHandler http.HandlerFunc) (
 				"refresh_token":"test-refresh-token",
 				"expires_in":3600,
 				"token_type":"Bearer",
-				"scope":"read write"
+				"scope":"read write",
+				"locationId":"loc-123"
 			}`))
 		case "/v1/users/me":
 			w.Header().Set("Content-Type", "application/json")

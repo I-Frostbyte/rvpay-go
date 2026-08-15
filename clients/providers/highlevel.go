@@ -169,6 +169,7 @@ func (p *HighLevelProvider) ExchangeCode(ctx context.Context, code string, redir
 		ExpiresIn    int64  `json:"expires_in"`
 		TokenType    string `json:"token_type"`
 		Scope        string `json:"scope"`
+		LocationID   string `json:"locationId"`
 	}
 
 	if err := json.Unmarshal(body, &tokenResp); err != nil {
@@ -181,6 +182,7 @@ func (p *HighLevelProvider) ExchangeCode(ctx context.Context, code string, redir
 		ExpiresIn:    tokenResp.ExpiresIn,
 		TokenType:    tokenResp.TokenType,
 		Scope:        tokenResp.Scope,
+		LocationID:   tokenResp.LocationID,
 	}, nil
 }
 
@@ -218,6 +220,7 @@ func (p *HighLevelProvider) RefreshToken(ctx context.Context, refreshToken strin
 		ExpiresIn    int64  `json:"expires_in"`
 		TokenType    string `json:"token_type"`
 		Scope        string `json:"scope"`
+		LocationID   string `json:"locationId"`
 	}
 
 	if err := json.Unmarshal(body, &tokenResp); err != nil {
@@ -230,6 +233,7 @@ func (p *HighLevelProvider) RefreshToken(ctx context.Context, refreshToken strin
 		ExpiresIn:    tokenResp.ExpiresIn,
 		TokenType:    tokenResp.TokenType,
 		Scope:        tokenResp.Scope,
+		LocationID:   tokenResp.LocationID,
 	}, nil
 }
 
