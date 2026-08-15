@@ -1,20 +1,17 @@
 # RVPay Go — Stage Checkpoint
 
-## Stage 06: Security, Idempotency and Error Boundaries — COMPLETE
+## Stage 07: Render Deployment and Environment Configuration — COMPLETE
 
-- [x] Audited secret logging: no credentials found in log/error paths
-- [x] Fixed OAuth token exchange error: raw response body sanitized (sanitizeErrorBody) instead of string(body)
-- [x] Fixed OAuth token refresh error: raw response body sanitized instead of string(body)
-- [x] Fixed GetUserInfo error: raw response body sanitized instead of string(body)
-- [x] Enhanced sanitizeErrorBody to redact access_token, refresh_token, client_secret, apiKey, api_key from JSON error bodies
-- [x] Constant-time comparison already used for provider API key validation (subtle.ConstantTimeCompare)
-- [x] Error handlers already map to sanitized HTTP responses (no internal details leaked)
-- [x] Tests: sanitizeErrorBody edge cases (empty, plain text, 6 credential redaction scenarios, non-JSON, truncation)
-- [x] gofmt, go test -race ./clients/..., go build ./... all pass
+- [x] Add missing env vars to render.yaml (PUBLIC_BASE_URL, HIGHLEVEL_API_BASE_URL)
+- [x] Verify render.yaml covers all required env vars for both services
+- [x] Verify service startup (Dockerfiles, entrypoints)
+- [x] Verify health endpoints
+- [x] Verify gRPC connectivity configuration
+- [x] Run go build ./... for both services
+- [x] Run go vet ./... for both services
+- [x] Update .clinecheck for Stage 07 completion
 
 ## Files Modified
-- clients/providers/highlevel.go (3 error messages now use sanitizeErrorBody)
-- clients/providers/highlevel_payment_provider.go (enhanced sanitizeErrorBody with JSON credential redaction)
-- clients/providers/highlevel_payment_provider_test.go (added 9 security-focused tests for sanitizeErrorBody)
+- render.yaml (added PUBLIC_BASE_URL and HIGHLEVEL_API_BASE_URL env vars)
 
-## Next: Stage 07 (new Cline task)
+## Next: Stage 08 (new Cline task)
