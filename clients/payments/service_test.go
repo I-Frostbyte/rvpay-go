@@ -2,6 +2,7 @@ package payments
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
@@ -123,8 +124,10 @@ func (m *mockIntegrationRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// mockWebhookEventRepo is a minimal WebhookEventRepo test double.
+// mockWebhookEventRepo is a minimal WebhookEventRepo test double with a mutex
+// for safe concurrent access in race-detected tests.
 type mockWebhookEventRepo struct {
+	mu     sync.Mutex
 	events map[string]bool
 }
 
@@ -133,6 +136,8 @@ func newMockWebhookEventRepo() *mockWebhookEventRepo {
 }
 
 func (m *mockWebhookEventRepo) Create(ctx context.Context, integrationID uuid.UUID, providerEventID, eventType string, payload []byte) (sqlc.WebhookEvent, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	key := integrationID.String() + ":" + providerEventID
 	if m.events[key] {
 		return sqlc.WebhookEvent{}, repo.ErrDuplicate
@@ -539,5 +544,118 @@ func TestHandleWebhook_WrongChargeID(t *testing.T) {
 	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"loc-1","transactionId":"txn-1","chargeId":"wrong-charge","apiKey":"valid-key"}`))
 	if err != nil {
 		t.Fatalf("unexpected error for wrong charge ID: %v", err)
+	}
+}
+
+// TestHandleWebhook_ConcurrentDuplicateEvents verifies that duplicate
+// webhook deliveries arriving concurrently are handled safely. Only one
+// should succeed; the rest must be acknowledged as duplicates without
+// corrupting state.
+func TestHandleWebhook_ConcurrentDuplicateEvents(t *testing.T) {
+	svc, configRepo, integrationRepo, _, txClient := newTestService()
+	integrationID := uuid.New()
+	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
+		IntegrationID:  integrationID,
+		LocationID:     "loc-1",
+		ProviderApiKey: "valid-key",
+	}
+	integrationRepo.integrations[integrationID.String()] = sqlc.Integration{
+		ID:     integrationID,
+		Status: sqlc.IntegrationStatusACTIVE,
+	}
+	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{Success: true}
+
+	body := []byte(`{"eventType":"payment.captured","eventId":"evt-concurrent","locationId":"loc-1","transactionId":"txn-1","chargeId":"charge-1","apiKey":"valid-key"}`)
+
+	// Launch 10 concurrent goroutines, all delivering the same event.
+	var wg sync.WaitGroup
+	errs := make(chan error, 10)
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- svc.HandleWebhook(context.Background(), body)
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	// Exactly one should succeed; the rest should be AlreadyExists.
+	successCount := 0
+	dupCount := 0
+	for err := range errs {
+		if err == nil {
+			successCount++
+		} else if status.Code(err) == codes.AlreadyExists {
+			dupCount++
+		} else {
+			t.Errorf("unexpected error code: %v", status.Code(err))
+		}
+	}
+	if successCount != 1 {
+		t.Errorf("expected exactly 1 success, got %d", successCount)
+	}
+	if dupCount != 9 {
+		t.Errorf("expected exactly 9 duplicates, got %d", dupCount)
+	}
+}
+
+// TestHandleWebhook_ConcurrentSameIDempotentKey verifies that when both
+// eventID and integrationID are the same, only one call succeeds.
+func TestHandleWebhook_ConcurrentSameIDempotentKey(t *testing.T) {
+	svc, configRepo, integrationRepo, _, txClient := newTestService()
+	integrationID := uuid.New()
+	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
+		IntegrationID:  integrationID,
+		LocationID:     "loc-1",
+		ProviderApiKey: "valid-key",
+	}
+	integrationRepo.integrations[integrationID.String()] = sqlc.Integration{
+		ID:     integrationID,
+		Status: sqlc.IntegrationStatusACTIVE,
+	}
+	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{Success: true}
+
+	body := []byte(`{"eventType":"payment.captured","eventId":"evt-same-id","locationId":"loc-1","transactionId":"txn-1","chargeId":"charge-1","apiKey":"valid-key"}`)
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, 5)
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errCh <- svc.HandleWebhook(context.Background(), body)
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+
+	successCount := 0
+	dupCount := 0
+	for err := range errCh {
+		if err == nil {
+			successCount++
+		} else if status.Code(err) == codes.AlreadyExists {
+			dupCount++
+		} else {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
+	if successCount != 1 {
+		t.Errorf("expected exactly 1 success, got %d", successCount)
+	}
+	if dupCount != 4 {
+		t.Errorf("expected exactly 4 duplicates, got %d", dupCount)
+	}
+}
+
+// TestHandleQuery_NilRequest verifies that passing a nil query request
+// returns an InvalidArgument error.
+func TestHandleQuery_NilRequest(t *testing.T) {
+	svc, _, _, _, _ := newTestService()
+
+	_, err := svc.HandleQuery(context.Background(), nil)
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument for nil request, got %v", status.Code(err))
 	}
 }

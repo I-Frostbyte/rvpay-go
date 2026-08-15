@@ -1,17 +1,21 @@
 # RVPay Go — Stage Checkpoint
 
-## Stage 07: Render Deployment and Environment Configuration — COMPLETE
+## Stage 08: End-to-End Local Integration Tests — COMPLETE
 
-- [x] Add missing env vars to render.yaml (PUBLIC_BASE_URL, HIGHLEVEL_API_BASE_URL)
-- [x] Verify render.yaml covers all required env vars for both services
-- [x] Verify service startup (Dockerfiles, entrypoints)
-- [x] Verify health endpoints
-- [x] Verify gRPC connectivity configuration
-- [x] Run go build ./... for both services
-- [x] Run go vet ./... for both services
-- [x] Update .clinecheck for Stage 07 completion
+- [x] Runtime route registration tests for payment query/webhook endpoints
+- [x] Provider configuration verification test (already existed in oauth tests)
+- [x] PawaPay boundary test (Clients never calls pawaPay)
+- [x] Concurrent webhook idempotency test with race detection
+- [x] go test ./clients/... — PASS
+- [x] go test -race ./clients/... — PASS
+- [x] go vet ./clients/... — PASS
+- [x] go build ./clients/... — PASS
+
+## Files Created
+- clients/payments/pawapay_test.go (pawaPay boundary enforcement via import analysis)
 
 ## Files Modified
-- render.yaml (added PUBLIC_BASE_URL and HIGHLEVEL_API_BASE_URL env vars)
+- clients/payments/service_test.go (added concurrent idempotency tests, nil/empty request tests)
+- clients/cmd/grpc-service/runtime_test.go (added payment query/webhook route registration tests)
 
-## Next: Stage 08 (new Cline task)
+## Next: Stage 09 (new Cline task)
