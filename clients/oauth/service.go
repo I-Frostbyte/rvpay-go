@@ -305,11 +305,13 @@ func (s *Service) ProcessCallback(ctx context.Context, clientID, platformID uuid
 
 	// Trigger the HighLevel Custom Payment Provider registration lifecycle.
 	// The OAuth installation is already persisted; registration is a
-	// best-effort follow-up that must not roll back the installation.
+	// best-effort follow-up that must not roll back the installation. The
+	// location ID used for registration is the actual HighLevel locationId
+	// from the OAuth token response, not the HighLevel user ID.
 	if provider.HasCapability(providers.CapabilityPaymentProvider) {
-		regErr := s.RegisterProvider(ctx, integration.ID, providerUserID, tokenResp.AccessToken)
+		regErr := s.RegisterProvider(ctx, integration.ID, tokenResp.LocationID, tokenResp.AccessToken)
 		if regErr != nil {
-			s.logger.Warn().Err(regErr).Str("integration_id", integration.ID.String()).Str("location_id", providerUserID).Msg("HighLevel provider registration failed; integration remains installed")
+			s.logger.Warn().Err(regErr).Str("integration_id", integration.ID.String()).Str("location_id", tokenResp.LocationID).Msg("HighLevel provider registration failed; integration remains installed")
 			result.ProviderRegistrationError = regErr
 		} else {
 			result.ProviderRegistered = true

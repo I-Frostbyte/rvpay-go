@@ -1,59 +1,14 @@
 # RVPay Go — Stage Checkpoint
 
-## Stage 10: Final Production Review — COMPLETE
+## Stage: Agent 07 — Fix GHL Location ID + gRPC Address — COMPLETE
 
-- [x] go fmt ./... — PASS (exit 0, reformatted files)
-- [x] go vet ./... — PASS (exit 0)
-- [x] go build ./... — PASS (exit 0)
-- [x] go test ./... — PASS (exit 0, all tests pass)
-- [x] git diff --check — PASS (exit 0, CRLF warnings only, no whitespace errors)
-- [x] Architecture review — Clients = GHL integration, Transactions = payment domain
-- [x] Security review — credentials isolated, no secrets logged, location boundaries enforced
-- [x] Deployment review — Render supported, env vars documented, no hard-coded hostnames, AWS-portable
-- [x] Database review — migrations present, indexes, unique constraints, foreign keys, idempotency
-- [x] Documentation updated — docs/project-checkpoint.md, agents/project-context.md
-- [x] Project scope — GHL Custom Payment Provider integration: CORRECTED AND COMPLETED
+- [x] Formatted agents/07-fix-ghl-location-and-grpc.md (lines 97-244, content preserved)
+- [x] HighLevel OAuth: captured `locationId` in token response (provider.go, highlevel.go)
+- [x] RegisterProvider() now receives `tokenResp.LocationID` (oauth/service.go)
+- [x] HighLevel user ID no longer used as location ID
+- [x] TRANSACTIONS_GRPC_ADDR set to rvpay-transactions.onrender.com:50051 (render.yaml)
+- [x] go build ./clients/... — PASS
+- [x] go test ./clients/... — PASS (all packages)
+- [x] git diff — only the two fixes + test mock update
 
-## Acceptances Verified
-
-Architecture:
-- [x] Clients owns GHL integration
-- [x] Transactions owns payment business logic
-- [x] No duplicate payment-domain logic in Clients
-- [x] pawaPay calls remain inside Transactions/provider boundary
-
-HighLevel:
-- [x] Existing OAuth remains functional
-- [x] /oauth/callback remains functional
-- [x] Provider association API implemented
-- [x] Provider configuration API implemented
-- [x] Configuration uses correct locationId
-- [x] Configuration uses configurable URLs
-- [x] No Render hostname hard-coded
-- [x] Required HighLevel scopes documented
-- [x] One-time payment capability correctly represented
-
-Query:
-- [x] Query endpoint exists (POST /payments/custom-provider/query)
-- [x] POST accepted, unsupported methods rejected
-- [x] verify implemented (success/failure/pending returned correctly)
-- [x] Transaction state comes from Transactions
-- [x] Provider API key authenticated
-
-Webhook:
-- [x] Payment-provider webhook exists (POST /payments/custom-provider/webhook)
-- [x] Marketplace webhook remains separate (/webhooks/highlevel)
-- [x] payment.captured supported
-- [x] Subscription events safely handled
-- [x] Persistent/idempotent via webhook_events table
-- [x] Concurrent duplicate events safe
-
-Testing:
-- [x] All tests pass
-- [x] go vet passes
-- [x] go build passes
-- [x] git diff --check passes
-- [x] No production HighLevel calls by tests
-- [x] No production pawaPay calls by tests
-
-## Next: Agent complete. Next phase: real HighLevel connectivity testing per clients/docs/connectivity-checklist.md
+## Next: Real HighLevel connectivity testing per clients/docs/connectivity-checklist.md

@@ -139,7 +139,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	// (TRANSACTIONS_GRPC_ADDR); it is never hard-coded.
 	transactionsAddr := os.Getenv("TRANSACTIONS_GRPC_ADDR")
 	if transactionsAddr == "" {
-		transactionsAddr = "localhost:50052"
+		return fmt.Errorf("TRANSACTIONS_GRPC_ADDR is required")
 	}
 	transactionsConn, err := grpc.NewClient(transactionsAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {

@@ -63,6 +63,10 @@ type TokenResponse struct {
 	ExpiresIn    int64
 	TokenType    string
 	Scope        string
+	// LocationID is the HighLevel location ID returned in the OAuth token
+	// response. It is the actual location used when registering the Custom
+	// Payment Provider.
+	LocationID string
 }
 
 // ProviderRegistry manages available providers.
