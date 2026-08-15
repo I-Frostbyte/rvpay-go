@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	integrationsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/integrationsgrpc"
 	"github.com/I-Frostbyte/rvpay-go/integrations/db/repo/mocks"
 	"github.com/I-Frostbyte/rvpay-go/integrations/db/sqlc"
 	sqlcmocks "github.com/I-Frostbyte/rvpay-go/integrations/db/sqlc/mocks"
-	integrationsgrpc "github.com/I-Frostbyte/rvpay-go/grpc/go/integrationsgrpc"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"

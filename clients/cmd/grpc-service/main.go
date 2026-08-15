@@ -98,7 +98,11 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	paymentProviderConfigRepo := repo.NewPaymentProviderConfigRepo(clientsRepo.Do())
 
 	providerRegistry := providers.NewProviderRegistry()
-	highLevelProvider := providers.NewHighLevelProvider(cfg.HighLevel.ClientID, cfg.HighLevel.ClientSecret, cfg.HighLevel.RedirectURI, cfg.HighLevel.WebhookPublicKey)
+	// The HighLevel Custom Payment Provider client makes authenticated outbound
+	// calls to HighLevel for provider registration/configuration. The base URL
+	// comes from configuration (HIGHLEVEL_API_BASE_URL); it is never hard-coded.
+	highLevelPaymentProvider := providers.NewHighLevelPaymentProviderClient(cfg.HighLevel.APIBaseURL, nil)
+	highLevelProvider := providers.NewHighLevelProvider(cfg.HighLevel.ClientID, cfg.HighLevel.ClientSecret, cfg.HighLevel.RedirectURI, cfg.HighLevel.WebhookPublicKey, highLevelPaymentProvider)
 	providerRegistry.Register(highLevelProvider)
 	logger.Info().Msg("providers registered successfully")
 
@@ -106,7 +110,24 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 	platformsService := service.NewPlatformsServiceImpl(platformRepo, logger)
 	integrationsService := service.NewIntegrationsServiceImpl(integrationRepo, clientRepo, platformRepo, oauthTokenRepo, webhookSubscriptionRepo, logger)
 
-	oauthService := oauth.NewService(integrationRepo, oauthTokenRepo, clientRepo, platformRepo, oauthStateRepo, providerRegistry, cfg.HighLevel.RedirectURI, logger)
+	oauthService := oauth.NewService(
+		integrationRepo,
+		oauthTokenRepo,
+		clientRepo,
+		platformRepo,
+		oauthStateRepo,
+		paymentProviderConfigRepo,
+		providerRegistry,
+		cfg.HighLevel.RedirectURI,
+		oauth.ProviderConfigSettings{
+			Name:        cfg.HighLevel.ProviderName,
+			Description: cfg.HighLevel.ProviderDescription,
+			ImageURL:    cfg.HighLevel.ProviderImageURL,
+			PaymentsURL: cfg.HighLevel.PaymentURL,
+			QueryURL:    cfg.HighLevel.QueryURL,
+		},
+		logger,
+	)
 	webhookService := webhooks.NewService(integrationRepo, webhookSubscriptionRepo, webhookEventRepo, platformRepo, providerRegistry, logger)
 	oauthHandler := clientshttp.NewOAuthHandler(oauthService, logger)
 	webhookHandler := clientshttp.NewWebhookHandler(webhookService, logger)
@@ -125,7 +146,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 		return fmt.Errorf("connect to transactions service: %w", err)
 	}
 	defer transactionsConn.Close()
-	transactionsClient := transactionsgrpc.NewDepositServiceClient(transactionsConn)
+	transactionsClient := transactionsgrpc.NewPaymentServiceClient(transactionsConn)
 
 	paymentService := payments.NewService(paymentProviderConfigRepo, integrationRepo, webhookEventRepo, transactionsClient, logger)
 	paymentQueryHandler := clientshttp.NewPaymentQueryHandler(paymentService, logger)

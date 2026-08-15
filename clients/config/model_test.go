@@ -23,6 +23,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 	os.Unsetenv("HIGHLEVEL_CLIENT_SECRET")
 	os.Unsetenv("HIGHLEVEL_REDIRECT_URI")
 	os.Unsetenv("HIGHLEVEL_WEBHOOK_PUBLIC_KEY")
+	os.Unsetenv("HIGHLEVEL_API_BASE_URL")
+	os.Unsetenv("PUBLIC_BASE_URL")
 
 	cfg := Config{}
 	err := cfg.LoadConfig()
@@ -63,6 +65,12 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.HighLevel.WebhookPublicKey != "" {
 		t.Fatalf("WebhookPublicKey = %s, want empty default", cfg.HighLevel.WebhookPublicKey)
 	}
+	if cfg.HighLevel.APIBaseURL != "https://services.leadconnectorhq.com" {
+		t.Fatalf("APIBaseURL = %s, want default HighLevel API base URL", cfg.HighLevel.APIBaseURL)
+	}
+	if cfg.HighLevel.PublicBaseURL != "" {
+		t.Fatalf("PublicBaseURL = %s, want empty default", cfg.HighLevel.PublicBaseURL)
+	}
 }
 
 func TestLoadConfigEnvironmentOverrides(t *testing.T) {
@@ -82,6 +90,8 @@ func TestLoadConfigEnvironmentOverrides(t *testing.T) {
 	os.Setenv("HIGHLEVEL_CLIENT_SECRET", "test-client-secret")
 	os.Setenv("HIGHLEVEL_REDIRECT_URI", "https://test.example.com/callback")
 	os.Setenv("HIGHLEVEL_WEBHOOK_PUBLIC_KEY", "test-webhook-public-key")
+	os.Setenv("HIGHLEVEL_API_BASE_URL", "https://test-api.example.com")
+	os.Setenv("PUBLIC_BASE_URL", "https://test.example.com")
 
 	defer func() {
 		os.Unsetenv("LOG_LEVEL")
@@ -98,6 +108,8 @@ func TestLoadConfigEnvironmentOverrides(t *testing.T) {
 		os.Unsetenv("HIGHLEVEL_CLIENT_SECRET")
 		os.Unsetenv("HIGHLEVEL_REDIRECT_URI")
 		os.Unsetenv("HIGHLEVEL_WEBHOOK_PUBLIC_KEY")
+		os.Unsetenv("HIGHLEVEL_API_BASE_URL")
+		os.Unsetenv("PUBLIC_BASE_URL")
 	}()
 
 	cfg := Config{}
@@ -147,6 +159,12 @@ func TestLoadConfigEnvironmentOverrides(t *testing.T) {
 	}
 	if cfg.HighLevel.WebhookPublicKey != "test-webhook-public-key" {
 		t.Fatalf("WebhookPublicKey = %s, want test-webhook-public-key", cfg.HighLevel.WebhookPublicKey)
+	}
+	if cfg.HighLevel.APIBaseURL != "https://test-api.example.com" {
+		t.Fatalf("APIBaseURL = %s, want test API base URL", cfg.HighLevel.APIBaseURL)
+	}
+	if cfg.HighLevel.PublicBaseURL != "https://test.example.com" {
+		t.Fatalf("PublicBaseURL = %s, want test public base URL", cfg.HighLevel.PublicBaseURL)
 	}
 }
 

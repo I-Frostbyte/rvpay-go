@@ -6,12 +6,13 @@ import "context"
 type Capability string
 
 const (
-	CapabilityOAuth          Capability = "oauth"
-	CapabilityWebhooks       Capability = "webhooks"
-	CapabilityTokenRefresh   Capability = "token_refresh"
-	CapabilityInstallation   Capability = "installation"
-	CapabilityUninstallation Capability = "uninstallation"
-	CapabilityHealthCheck    Capability = "health_check"
+	CapabilityOAuth           Capability = "oauth"
+	CapabilityWebhooks        Capability = "webhooks"
+	CapabilityTokenRefresh    Capability = "token_refresh"
+	CapabilityInstallation    Capability = "installation"
+	CapabilityUninstallation  Capability = "uninstallation"
+	CapabilityHealthCheck     Capability = "health_check"
+	CapabilityPaymentProvider Capability = "payment_provider"
 )
 
 // Provider represents a marketplace platform provider.
@@ -28,6 +29,17 @@ type Provider interface {
 	OAuthProvider() OAuthProvider
 	// WebhookProvider returns the webhook implementation for this provider.
 	WebhookProvider() WebhookProvider
+	// PaymentProvider returns the Custom Payment Provider client for this
+	// provider, or nil if the provider does not support it.
+	PaymentProvider() PaymentProviderClient
+}
+
+// PaymentProviderCapable is implemented by providers that support Custom
+// Payment Provider operations.
+type PaymentProviderCapable interface {
+	// PaymentProvider returns the Custom Payment Provider client
+	// implementation for this provider.
+	PaymentProvider() PaymentProviderClient
 }
 
 // OAuthProvider defines the OAuth lifecycle for a provider.

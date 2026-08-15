@@ -51,6 +51,15 @@ type HighLevelConfig struct {
 	// ProviderImageURL is the image URL of the payment provider
 	// (HIGHLEVEL_PROVIDER_IMAGE_URL).
 	ProviderImageURL string
+	// APIBaseURL is the HighLevel API base URL used for outbound Custom
+	// Payment Provider calls (HIGHLEVEL_API_BASE_URL). It is configuration,
+	// never hard-coded.
+	APIBaseURL string
+	// PublicBaseURL is the publicly reachable base URL of the deployed
+	// backend (PUBLIC_BASE_URL). It is used to derive the backend query URL
+	// for the payment provider configuration. It is configuration, never
+	// hard-coded.
+	PublicBaseURL string
 }
 
 // LoadConfig loads configuration from environment variables.
@@ -76,6 +85,8 @@ func (c *Config) LoadConfig() error {
 	c.HighLevel.ProviderName = getEnv("HIGHLEVEL_PROVIDER_NAME", "RVPay")
 	c.HighLevel.ProviderDescription = getEnv("HIGHLEVEL_PROVIDER_DESCRIPTION", "RVPay payment provider")
 	c.HighLevel.ProviderImageURL = getEnv("HIGHLEVEL_PROVIDER_IMAGE_URL", "")
+	c.HighLevel.APIBaseURL = getEnv("HIGHLEVEL_API_BASE_URL", "https://services.leadconnectorhq.com")
+	c.HighLevel.PublicBaseURL = getEnv("PUBLIC_BASE_URL", "")
 
 	return nil
 }

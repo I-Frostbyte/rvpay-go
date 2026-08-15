@@ -247,9 +247,23 @@ Configure the GHL Marketplace app with:
 - **Webhook URL** → `https://<render-client-host>/webhooks/highlevel`
 - **Webhook Verification** → `X-GHL-Signature` / Ed25519
 - **Public Key** → `HIGHLEVEL_WEBHOOK_PUBLIC_KEY`
+- **Required Scopes** → see scope table below
 
 The Render hostname is supplied through deployment configuration
 (`HIGHLEVEL_REDIRECT_URI`); it is never hard-coded.
+
+#### Required Marketplace scopes
+
+| Scope | Purpose |
+| --- | --- |
+| `payments/custom-provider.readonly` | Read payment provider configuration |
+| `payments/custom-provider.write` | Create/update/delete payment provider configuration |
+| `payments/orders.readonly` | Read payment order information |
+| `payments/orders.write` | Create payment orders |
+| `payments/transactions.readonly` | Read payment transaction history |
+
+Subscription-related scopes (`payments/subscriptions.readonly`) are **not**
+required — RVPay supports one-time payments only.
 
 ### GHL Custom Payment Provider
 

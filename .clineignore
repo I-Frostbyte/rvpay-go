@@ -1,0 +1,34 @@
+# Dependencies and Package Managers
+node_modules/
+.npm/
+vendor/
+.venv/
+env/
+
+# Build Outputs and Cache
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+*.pyc
+
+# Heavy Media and Data Files
+*.mp4
+*.mp3
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.csv
+*.json
+*.sql
+*.log
+
+# Version Control and IDEs
+.git/
+.idea/
+.vscode/
+*.suo
+*.ntvs*

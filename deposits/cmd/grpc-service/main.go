@@ -84,7 +84,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 			return fmt.Errorf("failed to migrate: %w", err)
 		}
 
-	logger.Info().Msg("Migrations successful...")
+		logger.Info().Msg("Migrations successful...")
 	} else {
 		logger.Info().Msg("database migrations are managed externally")
 	}

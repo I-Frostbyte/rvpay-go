@@ -24,6 +24,7 @@ type HighLevelProvider struct {
 	userInfoURL      string
 	scopes           []string
 	httpClient       *http.Client
+	paymentProvider  PaymentProviderClient
 }
 
 // NewHighLevelProvider creates a new HighLevel provider. webhookPublicKey is
@@ -31,7 +32,11 @@ type HighLevelProvider struct {
 // signatures (HIGHLEVEL_WEBHOOK_PUBLIC_KEY). It is public cryptographic
 // material, not a private credential, and must not be confused with the OAuth
 // client secret.
-func NewHighLevelProvider(clientID, clientSecret, redirectURI, webhookPublicKey string) *HighLevelProvider {
+//
+// paymentProvider is the Custom Payment Provider client used for outbound
+// HighLevel provider registration/configuration calls. It may be nil if the
+// provider does not support Custom Payment Provider operations.
+func NewHighLevelProvider(clientID, clientSecret, redirectURI, webhookPublicKey string, paymentProvider PaymentProviderClient) *HighLevelProvider {
 	return &HighLevelProvider{
 		clientID:         clientID,
 		clientSecret:     clientSecret,
@@ -43,7 +48,27 @@ func NewHighLevelProvider(clientID, clientSecret, redirectURI, webhookPublicKey 
 		scopes:           []string{"read", "write"},
 		// A single shared client is reused across all provider calls so HTTP
 		// connections are pooled and reused rather than recreated per request.
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		httpClient:      &http.Client{Timeout: 10 * time.Second},
+		paymentProvider: paymentProvider,
+	}
+}
+
+// NewHighLevelProviderWithURLs creates a new HighLevel provider with
+// configurable OAuth and user-info URLs. It is primarily intended for tests
+// that need to mock the HighLevel API endpoints. The URLs must be valid HTTP
+// or HTTPS URLs.
+func NewHighLevelProviderWithURLs(clientID, clientSecret, redirectURI, webhookPublicKey, authURL, tokenURL, userInfoURL string, paymentProvider PaymentProviderClient) *HighLevelProvider {
+	return &HighLevelProvider{
+		clientID:         clientID,
+		clientSecret:     clientSecret,
+		webhookPublicKey: webhookPublicKey,
+		redirectURI:      redirectURI,
+		authURL:          authURL,
+		tokenURL:         tokenURL,
+		userInfoURL:      userInfoURL,
+		scopes:           []string{"read", "write"},
+		httpClient:       &http.Client{Timeout: 10 * time.Second},
+		paymentProvider:  paymentProvider,
 	}
 }
 
@@ -56,19 +81,25 @@ func (p *HighLevelProvider) Name() string {
 }
 
 func (p *HighLevelProvider) Capabilities() []Capability {
-	return []Capability{
+	caps := []Capability{
 		CapabilityOAuth,
 		CapabilityWebhooks,
 		CapabilityTokenRefresh,
 		CapabilityInstallation,
 		CapabilityUninstallation,
 	}
+	if p.paymentProvider != nil {
+		caps = append(caps, CapabilityPaymentProvider)
+	}
+	return caps
 }
 
 func (p *HighLevelProvider) HasCapability(capability Capability) bool {
 	switch capability {
 	case CapabilityOAuth, CapabilityWebhooks, CapabilityTokenRefresh, CapabilityInstallation, CapabilityUninstallation:
 		return true
+	case CapabilityPaymentProvider:
+		return p.paymentProvider != nil
 	default:
 		return false
 	}
@@ -80,6 +111,10 @@ func (p *HighLevelProvider) OAuthProvider() OAuthProvider {
 
 func (p *HighLevelProvider) WebhookProvider() WebhookProvider {
 	return NewHighLevelWebhookProvider(p.webhookPublicKey)
+}
+
+func (p *HighLevelProvider) PaymentProvider() PaymentProviderClient {
+	return p.paymentProvider
 }
 
 func (p *HighLevelProvider) GenerateAuthorizationURL(ctx context.Context, state string, redirectURI string) (string, error) {
@@ -125,7 +160,7 @@ func (p *HighLevelProvider) ExchangeCode(ctx context.Context, code string, redir
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token exchange failed: %s", string(body))
+		return nil, fmt.Errorf("token exchange failed: %s", sanitizeErrorBody(body))
 	}
 
 	var tokenResp struct {
@@ -174,7 +209,7 @@ func (p *HighLevelProvider) RefreshToken(ctx context.Context, refreshToken strin
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token refresh failed: %s", string(body))
+		return nil, fmt.Errorf("token refresh failed: %s", sanitizeErrorBody(body))
 	}
 
 	var tokenResp struct {
@@ -217,7 +252,7 @@ func (p *HighLevelProvider) GetUserInfo(ctx context.Context, accessToken string)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("user info request failed: %s", string(body))
+		return "", fmt.Errorf("user info request failed: %s", sanitizeErrorBody(body))
 	}
 
 	var userInfo struct {

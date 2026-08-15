@@ -44,6 +44,28 @@ var (
 	ErrMissingCode = status.Error(codes.InvalidArgument, "authorization code is required")
 	// ErrMissingState is returned when the OAuth callback is missing the state.
 	ErrMissingState = status.Error(codes.InvalidArgument, "OAuth state is required")
+
+	// ErrProviderConfigRepoNotConfigured is returned when the payment provider
+	// config repository is not configured on the OAuth service.
+	ErrProviderConfigRepoNotConfigured = status.Error(codes.FailedPrecondition, "payment provider config repository not configured")
+	// ErrMissingLocationID is returned when no location ID is provided for
+	// provider registration.
+	ErrMissingLocationID = status.Error(codes.InvalidArgument, "location ID is required")
+	// ErrMissingAccessToken is returned when no access token is provided for
+	// provider registration.
+	ErrMissingAccessToken = status.Error(codes.InvalidArgument, "access token is required")
+	// ErrPaymentProviderNotSupported is returned when the provider does not
+	// support Custom Payment Provider operations.
+	ErrPaymentProviderNotSupported = status.Error(codes.FailedPrecondition, "payment provider not supported")
+	// ErrProviderAssociationFailed is returned when creating the provider
+	// association with HighLevel fails.
+	ErrProviderAssociationFailed = status.Error(codes.Internal, "provider association failed")
+	// ErrProviderConfigFailed is returned when creating or fetching the
+	// provider configuration with HighLevel fails.
+	ErrProviderConfigFailed = status.Error(codes.Internal, "provider configuration failed")
+	// ErrAPIKeyGenerationFailed is returned when generating the provider API
+	// key fails.
+	ErrAPIKeyGenerationFailed = status.Error(codes.Internal, "provider API key generation failed")
 )
 
 // translateError converts repository errors to business errors.

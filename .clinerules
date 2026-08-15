@@ -489,3 +489,21 @@ When uncertain:
 When executing commands in WSL, always append ' && sleep 1' to ensure the terminal buffer flushes entirely before the stream closes.
 
 Do not chain complex background health checks using 'sleep', 'cat', and 'curl' in a single line. Run background servers independently using the explicit background execution tool options, or inspect logs in a completely separate terminal action.
+
+# Context Management & Token Preservation
+- **Strict 10% Limit:** Continuously track token usage. Keep the active context window below 10% capacity at all times.
+- **Aggressive Compacting:** Proactively execute the `/compact` command or request a task handoff immediately if context usage approaches or exceeds 10%.
+- **Test & Final Check Restrictions:** During final verification, code execution, and testing phases, you must NOT hit the API with a heavy conversation history. Keep it strictly below the 10% threshold.
+- **Stateless Checks:** Isolate testing scripts so they run independently. If history is bloated prior to a final check, instruct the user to spin up a `new_task` to execute the final verification with a clean, minimal context.
+
+# Prompt Cache Optimization & Alignment
+- **Maintain Static Prefixes:** Never alter, append, or reorder core system rules or `.clinerules` summaries mid-task. Keeping the beginning of the prompt identical maximizes cache hits.
+- **Avoid Micro-Edits to System Prompt:** Do not inject volatile, shifting metadata (like active timestamps, rapid random IDs, or changing task descriptions) into the primary instructions.
+- **Sequential Tool Output Accumulation:** When writing tool execution blocks, append logs chronologically to the end of the history rather than rewriting earlier blocks, preserving the upstream cache lookback.
+- **Group File Ingestion:** If multiple codebase files must be analyzed, read them closely together within consecutive turns to minimize cache-write penalties and take advantage of the 5-minute TTL window.
+
+# Agent & Stage Checkpoint Protocol
+- **Single-File State Tracking:** Maintain all agent phases and sub-task checkpoints exclusively inside `.clinecheck`. Do NOT create extra documentation files.
+- **Enforce the 15-Line Rule:** The `.clinecheck` file must remain a dense status dashboard. Never let it exceed 15 lines of plain markdown.
+- **Stage Completion Gate:** Before transitioning to a new sub-task or agent role, you must update the status in `.clinecheck`, state the specific files modified, and commit the current delta to Git with a distinct semantic message (e.g., `feat(agent-subtask): checkpoint`).
+- **Context Clear Sequence:** Immediately after updating `.clinecheck` and making the checkpoint commit, output the state summary to the chat, instruct the user that the milestone is locked, and immediately command a task handoff (`new_task`) to clear the chat history.

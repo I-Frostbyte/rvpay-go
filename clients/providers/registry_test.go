@@ -24,7 +24,7 @@ func TestProviderRegistry(t *testing.T) {
 	}
 
 	// Test registration
-	provider := NewHighLevelProvider("client-id", "client-secret", "https://example.com/callback", "webhook-secret")
+	provider := NewHighLevelProvider("client-id", "client-secret", "https://example.com/callback", "webhook-secret", nil)
 	registry.Register(provider)
 
 	if got := len(registry.List()); got != 1 {
@@ -81,7 +81,7 @@ func TestProviderRegistry(t *testing.T) {
 	}
 
 	// Test duplicate registration (should overwrite)
-	provider2 := NewHighLevelProvider("client-id-2", "client-secret-2", "https://example.com/callback2", "webhook-secret-2")
+	provider2 := NewHighLevelProvider("client-id-2", "client-secret-2", "https://example.com/callback2", "webhook-secret-2", nil)
 	registry.Register(provider2)
 	if got := len(registry.List()); got != 1 {
 		t.Fatalf("registry should still have 1 provider after duplicate registration, got %d", got)
@@ -110,7 +110,7 @@ func TestHighLevelWebhookPublicKeyIsUsedForSignatureVerification(t *testing.T) {
 	}
 	webhookPublicKey := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes}))
 
-	provider := NewHighLevelProvider("client-id", clientSecret, "https://example.com/callback", webhookPublicKey)
+	provider := NewHighLevelProvider("client-id", clientSecret, "https://example.com/callback", webhookPublicKey, nil)
 
 	whp := provider.WebhookProvider()
 	if whp == nil {

@@ -2,6 +2,8 @@ package oauth
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
@@ -391,6 +393,89 @@ func (m *mockOAuthStateRepo) DeleteExpired(ctx context.Context) (int64, error) {
 	return 0, nil
 }
 
+// mockPaymentProviderConfigRepo is a test double for PaymentProviderConfigRepo
+type mockPaymentProviderConfigRepo struct {
+	configs map[string]sqlc.PaymentProviderConfig
+}
+
+func newMockPaymentProviderConfigRepo() *mockPaymentProviderConfigRepo {
+	return &mockPaymentProviderConfigRepo{
+		configs: make(map[string]sqlc.PaymentProviderConfig),
+	}
+}
+
+func (m *mockPaymentProviderConfigRepo) Create(ctx context.Context, integrationID uuid.UUID, providerName, providerDescription, providerImageURL, locationID, queryURL, paymentsURL string, supportsSubscriptionSchedule bool, providerAPIKey string) (sqlc.PaymentProviderConfig, error) {
+	config := sqlc.PaymentProviderConfig{
+		ID:                           uuid.New(),
+		IntegrationID:                integrationID,
+		ProviderName:                 providerName,
+		ProviderDescription:          providerDescription,
+		ProviderImageUrl:             providerImageURL,
+		LocationID:                   locationID,
+		QueryUrl:                     queryURL,
+		PaymentsUrl:                  paymentsURL,
+		SupportsSubscriptionSchedule: supportsSubscriptionSchedule,
+		ProviderApiKey:               providerAPIKey,
+	}
+	m.configs[config.ID.String()] = config
+	return config, nil
+}
+
+func (m *mockPaymentProviderConfigRepo) GetByIntegrationID(ctx context.Context, integrationID uuid.UUID) (sqlc.PaymentProviderConfig, error) {
+	for _, config := range m.configs {
+		if config.IntegrationID == integrationID {
+			return config, nil
+		}
+	}
+	return sqlc.PaymentProviderConfig{}, repo.ErrNotFound
+}
+
+func (m *mockPaymentProviderConfigRepo) GetByLocationID(ctx context.Context, locationID string) (sqlc.PaymentProviderConfig, error) {
+	for _, config := range m.configs {
+		if config.LocationID == locationID {
+			return config, nil
+		}
+	}
+	return sqlc.PaymentProviderConfig{}, repo.ErrNotFound
+}
+
+func (m *mockPaymentProviderConfigRepo) GetByAPIKey(ctx context.Context, apiKey string) (sqlc.PaymentProviderConfig, error) {
+	for _, config := range m.configs {
+		if config.ProviderApiKey == apiKey {
+			return config, nil
+		}
+	}
+	return sqlc.PaymentProviderConfig{}, repo.ErrNotFound
+}
+
+func (m *mockPaymentProviderConfigRepo) Update(ctx context.Context, integrationID uuid.UUID, providerName, providerDescription, providerImageURL, locationID, queryURL, paymentsURL string, supportsSubscriptionSchedule bool, providerAPIKey string) (sqlc.PaymentProviderConfig, error) {
+	for id, config := range m.configs {
+		if config.IntegrationID == integrationID {
+			config.ProviderName = providerName
+			config.ProviderDescription = providerDescription
+			config.ProviderImageUrl = providerImageURL
+			config.LocationID = locationID
+			config.QueryUrl = queryURL
+			config.PaymentsUrl = paymentsURL
+			config.SupportsSubscriptionSchedule = supportsSubscriptionSchedule
+			config.ProviderApiKey = providerAPIKey
+			m.configs[id] = config
+			return config, nil
+		}
+	}
+	return sqlc.PaymentProviderConfig{}, repo.ErrNotFound
+}
+
+func (m *mockPaymentProviderConfigRepo) Delete(ctx context.Context, integrationID uuid.UUID) error {
+	for id, config := range m.configs {
+		if config.IntegrationID == integrationID {
+			delete(m.configs, id)
+			return nil
+		}
+	}
+	return repo.ErrNotFound
+}
+
 // mockOAuthTokenRepo is a test double for OAuthTokenRepo
 type mockOAuthTokenRepo struct {
 	tokens map[string]sqlc.OauthToken
@@ -486,7 +571,7 @@ func TestAuthorizationURL(t *testing.T) {
 	}
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret"))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret", nil))
 
 	svc := NewService(
 		newMockIntegrationRepo(),
@@ -494,8 +579,10 @@ func TestAuthorizationURL(t *testing.T) {
 		newMockClientRepo(),
 		platformRepo,
 		newMockOAuthStateRepo(),
+		newMockPaymentProviderConfigRepo(),
 		registry,
 		"https://example.com/callback",
+		ProviderConfigSettings{},
 		zerolog.Nop(),
 	)
 
@@ -532,7 +619,7 @@ func TestAuthorizationURLDisabledPlatform(t *testing.T) {
 	}
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret"))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "test-webhook-secret", nil))
 
 	svc := NewService(
 		newMockIntegrationRepo(),
@@ -540,8 +627,10 @@ func TestAuthorizationURLDisabledPlatform(t *testing.T) {
 		newMockClientRepo(),
 		platformRepo,
 		newMockOAuthStateRepo(),
+		newMockPaymentProviderConfigRepo(),
 		registry,
 		"https://example.com/callback",
+		ProviderConfigSettings{},
 		zerolog.Nop(),
 	)
 
@@ -564,7 +653,7 @@ func TestBeginAuthorization(t *testing.T) {
 	platformRepo.platforms[platformID.String()] = sqlc.Platform{ID: platformID, Name: "HighLevel", Slug: "highlevel", Enabled: true}
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", ""))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "", nil))
 
 	svc := NewService(
 		newMockIntegrationRepo(),
@@ -572,8 +661,10 @@ func TestBeginAuthorization(t *testing.T) {
 		clientRepo,
 		platformRepo,
 		stateRepo,
+		newMockPaymentProviderConfigRepo(),
 		registry,
 		"https://example.com/callback",
+		ProviderConfigSettings{},
 		zerolog.Nop(),
 	)
 
@@ -615,7 +706,7 @@ func TestBeginAuthorizationInactiveClient(t *testing.T) {
 	platformRepo.platforms[platformID.String()] = sqlc.Platform{ID: platformID, Name: "HighLevel", Slug: "highlevel", Enabled: true}
 
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", ""))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "", nil))
 
 	svc := NewService(
 		newMockIntegrationRepo(),
@@ -623,8 +714,10 @@ func TestBeginAuthorizationInactiveClient(t *testing.T) {
 		clientRepo,
 		platformRepo,
 		newMockOAuthStateRepo(),
+		newMockPaymentProviderConfigRepo(),
 		registry,
 		"https://example.com/callback",
+		ProviderConfigSettings{},
 		zerolog.Nop(),
 	)
 
@@ -643,8 +736,10 @@ func TestHandleCallbackMissingCode(t *testing.T) {
 		newMockClientRepo(),
 		newMockPlatformRepo(),
 		newMockOAuthStateRepo(),
+		newMockPaymentProviderConfigRepo(),
 		providers.NewProviderRegistry(),
 		"https://example.com/callback",
+		ProviderConfigSettings{},
 		zerolog.Nop(),
 	)
 
@@ -663,8 +758,10 @@ func TestHandleCallbackMissingState(t *testing.T) {
 		newMockClientRepo(),
 		newMockPlatformRepo(),
 		newMockOAuthStateRepo(),
+		newMockPaymentProviderConfigRepo(),
 		providers.NewProviderRegistry(),
 		"https://example.com/callback",
+		ProviderConfigSettings{},
 		zerolog.Nop(),
 	)
 
@@ -683,8 +780,10 @@ func TestHandleCallbackInvalidState(t *testing.T) {
 		newMockClientRepo(),
 		newMockPlatformRepo(),
 		newMockOAuthStateRepo(),
+		newMockPaymentProviderConfigRepo(),
 		providers.NewProviderRegistry(),
 		"https://example.com/callback",
+		ProviderConfigSettings{},
 		zerolog.Nop(),
 	)
 
@@ -714,8 +813,10 @@ func TestHandleCallbackExpiredState(t *testing.T) {
 		newMockClientRepo(),
 		newMockPlatformRepo(),
 		stateRepo,
+		newMockPaymentProviderConfigRepo(),
 		providers.NewProviderRegistry(),
 		"https://example.com/callback",
+		ProviderConfigSettings{},
 		zerolog.Nop(),
 	)
 
@@ -746,8 +847,10 @@ func TestHandleCallbackConsumedState(t *testing.T) {
 		newMockClientRepo(),
 		newMockPlatformRepo(),
 		stateRepo,
+		newMockPaymentProviderConfigRepo(),
 		providers.NewProviderRegistry(),
 		"https://example.com/callback",
+		ProviderConfigSettings{},
 		zerolog.Nop(),
 	)
 
@@ -777,13 +880,441 @@ func TestAuthorizationURLUnknownProvider(t *testing.T) {
 		newMockClientRepo(),
 		platformRepo,
 		newMockOAuthStateRepo(),
+		newMockPaymentProviderConfigRepo(),
 		registry,
 		"https://example.com/callback",
+		ProviderConfigSettings{},
 		zerolog.Nop(),
 	)
 
 	_, err := svc.AuthorizationURL(context.Background(), uuid.New(), platformID, "test-state")
 	if status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("status code = %s, want %s", status.Code(err), codes.FailedPrecondition)
+	}
+}
+
+// --- Stage 03: HighLevel Registration Lifecycle Tests ---
+
+// newRegistrationTestService builds an OAuth service wired to in-memory mocks
+// and a HighLevel provider whose OAuth and payment client point at the given
+// mock server. It returns the service and the mock repos for assertions.
+func newRegistrationTestService(t *testing.T, paymentHandler http.HandlerFunc) (*Service, *mockIntegrationRepo, *mockOAuthTokenRepo, *mockClientRepo, *mockPlatformRepo, *mockOAuthStateRepo, *mockPaymentProviderConfigRepo) {
+	t.Helper()
+
+	// Mock HighLevel server that handles both OAuth token exchange, user info,
+	// and payment provider endpoints.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/oauth/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{
+				"access_token":"test-access-token",
+				"refresh_token":"test-refresh-token",
+				"expires_in":3600,
+				"token_type":"Bearer",
+				"scope":"read write"
+			}`))
+		case "/v1/users/me":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"loc-123"}`))
+		default:
+			paymentHandler(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	paymentClient := providers.NewHighLevelPaymentProviderClient(srv.URL, nil)
+	registry := providers.NewProviderRegistry()
+	registry.Register(providers.NewHighLevelProviderWithURLs(
+		"test-client",
+		"test-secret",
+		"https://example.com/callback",
+		"",
+		srv.URL+"/oauth/authorize",
+		srv.URL+"/oauth/token",
+		srv.URL+"/v1/users/me",
+		paymentClient,
+	))
+
+	integrationRepo := newMockIntegrationRepo()
+	tokenRepo := newMockOAuthTokenRepo()
+	clientRepo := newMockClientRepo()
+	platformRepo := newMockPlatformRepo()
+	stateRepo := newMockOAuthStateRepo()
+	configRepo := newMockPaymentProviderConfigRepo()
+
+	svc := NewService(
+		integrationRepo,
+		tokenRepo,
+		clientRepo,
+		platformRepo,
+		stateRepo,
+		configRepo,
+		registry,
+		"https://example.com/callback",
+		ProviderConfigSettings{
+			Name:        "RVPay",
+			Description: "RVPay payment provider",
+			ImageURL:    "https://example.com/logo.jpg",
+			PaymentsURL: "https://checkout.example.com/payment/checkout",
+			QueryURL:    "https://api.example.com/payments/custom-provider/query",
+		},
+		zerolog.Nop(),
+	)
+
+	return svc, integrationRepo, tokenRepo, clientRepo, platformRepo, stateRepo, configRepo
+}
+
+// setupRegistrationContext populates the mocks with a valid client, platform,
+// and OAuth state so ProcessCallback can be exercised.
+func setupRegistrationContext(t *testing.T, clientRepo *mockClientRepo, platformRepo *mockPlatformRepo, stateRepo *mockOAuthStateRepo) (uuid.UUID, uuid.UUID, string) {
+	t.Helper()
+
+	clientID := uuid.New()
+	platformID := uuid.New()
+	clientRepo.clients[clientID.String()] = sqlc.Client{ID: clientID, Status: sqlc.ClientStatusACTIVE}
+	platformRepo.platforms[platformID.String()] = sqlc.Platform{ID: platformID, Name: "HighLevel", Slug: "highlevel", Enabled: true}
+
+	state := "test-state"
+	_, err := stateRepo.Create(context.Background(), state, clientID, platformID, time.Now().Add(time.Minute))
+	if err != nil {
+		t.Fatalf("create state: %v", err)
+	}
+
+	return clientID, platformID, state
+}
+
+func TestProcessCallback_ProviderRegistrationSuccess(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: both association and config creation succeed.
+	svc, integrationRepo, tokenRepo, clientRepo, platformRepo, stateRepo, configRepo := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/payments/custom-provider/provider":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"success":true}`))
+		case "/payments/custom-provider/connect":
+			if r.Method == http.MethodPost {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"success":true}`))
+			} else {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+
+	clientID, platformID, state := setupRegistrationContext(t, clientRepo, platformRepo, stateRepo)
+
+	result, err := svc.HandleCallback(context.Background(), "test-code", state)
+	if err != nil {
+		t.Fatalf("HandleCallback failed: %v", err)
+	}
+
+	if !result.ProviderRegistered {
+		t.Fatal("ProviderRegistered should be true")
+	}
+	if result.ProviderRegistrationError != nil {
+		t.Fatalf("ProviderRegistrationError should be nil, got %v", result.ProviderRegistrationError)
+	}
+
+	// Integration and token must be persisted.
+	if len(integrationRepo.integrations) != 1 {
+		t.Fatalf("expected 1 integration, got %d", len(integrationRepo.integrations))
+	}
+	if len(tokenRepo.tokens) != 1 {
+		t.Fatalf("expected 1 token, got %d", len(tokenRepo.tokens))
+	}
+
+	// Provider config must be persisted.
+	if len(configRepo.configs) != 1 {
+		t.Fatalf("expected 1 provider config, got %d", len(configRepo.configs))
+	}
+	for _, config := range configRepo.configs {
+		if config.LocationID != "loc-123" {
+			t.Errorf("LocationID = %q, want loc-123", config.LocationID)
+		}
+		if config.ProviderName != "RVPay" {
+			t.Errorf("ProviderName = %q, want RVPay", config.ProviderName)
+		}
+		if config.QueryUrl != "https://api.example.com/payments/custom-provider/query" {
+			t.Errorf("QueryUrl = %q, want configured URL", config.QueryUrl)
+		}
+		if config.PaymentsUrl != "https://checkout.example.com/payment/checkout" {
+			t.Errorf("PaymentsUrl = %q, want configured URL", config.PaymentsUrl)
+		}
+		if config.SupportsSubscriptionSchedule {
+			t.Error("SupportsSubscriptionSchedule should be false")
+		}
+		if config.ProviderApiKey == "" {
+			t.Error("ProviderApiKey should not be empty")
+		}
+	}
+
+	// The client and platform IDs must match.
+	for _, integration := range integrationRepo.integrations {
+		if integration.ClientID != clientID {
+			t.Errorf("integration ClientID = %v, want %v", integration.ClientID, clientID)
+		}
+		if integration.PlatformID != platformID {
+			t.Errorf("integration PlatformID = %v, want %v", integration.PlatformID, platformID)
+		}
+	}
+}
+
+func TestProcessCallback_ProviderAssociationFailure(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: association fails with 500.
+	svc, _, _, clientRepo, platformRepo, stateRepo, _ := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/payments/custom-provider/provider":
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"message":"internal error"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+
+	_, _, state := setupRegistrationContext(t, clientRepo, platformRepo, stateRepo)
+
+	result, err := svc.HandleCallback(context.Background(), "test-code", state)
+	if err != nil {
+		t.Fatalf("HandleCallback failed: %v", err)
+	}
+
+	// OAuth installation succeeds even though registration fails.
+	if result.ProviderRegistered {
+		t.Fatal("ProviderRegistered should be false when association fails")
+	}
+	if result.ProviderRegistrationError == nil {
+		t.Fatal("ProviderRegistrationError should be set when association fails")
+	}
+	if status.Code(result.ProviderRegistrationError) != codes.Internal {
+		t.Fatalf("ProviderRegistrationError code = %s, want %s", status.Code(result.ProviderRegistrationError), codes.Internal)
+	}
+}
+
+func TestProcessCallback_ProviderConfigFailure(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: association succeeds, config creation fails with 500.
+	svc, _, _, clientRepo, platformRepo, stateRepo, _ := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/payments/custom-provider/provider":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"success":true}`))
+		case "/payments/custom-provider/connect":
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"message":"internal error"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+
+	_, _, state := setupRegistrationContext(t, clientRepo, platformRepo, stateRepo)
+
+	result, err := svc.HandleCallback(context.Background(), "test-code", state)
+	if err != nil {
+		t.Fatalf("HandleCallback failed: %v", err)
+	}
+
+	if result.ProviderRegistered {
+		t.Fatal("ProviderRegistered should be false when config creation fails")
+	}
+	if result.ProviderRegistrationError == nil {
+		t.Fatal("ProviderRegistrationError should be set when config creation fails")
+	}
+	if status.Code(result.ProviderRegistrationError) != codes.Internal {
+		t.Fatalf("ProviderRegistrationError code = %s, want %s", status.Code(result.ProviderRegistrationError), codes.Internal)
+	}
+}
+
+func TestProcessCallback_AlreadyConfiguredLocation(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: association returns 400 (already exists), config
+	// creation returns 422 (already exists), and fetch returns the existing
+	// configuration.
+	svc, _, _, clientRepo, platformRepo, stateRepo, configRepo := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/payments/custom-provider/provider":
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"message":"provider already exists"}`))
+		case "/payments/custom-provider/connect":
+			if r.Method == http.MethodPost {
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				_, _ = w.Write([]byte(`{"message":"config already exists"}`))
+			} else if r.Method == http.MethodGet {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{
+					"name":"RVPay",
+					"description":"RVPay payment provider",
+					"imageUrl":"https://example.com/logo.jpg",
+					"locationId":"loc-123",
+					"queryUrl":"https://api.example.com/payments/custom-provider/query",
+					"paymentsUrl":"https://checkout.example.com/payment/checkout",
+					"supportsSubscriptionSchedule":false
+				}`))
+			} else {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+
+	_, _, state := setupRegistrationContext(t, clientRepo, platformRepo, stateRepo)
+
+	result, err := svc.HandleCallback(context.Background(), "test-code", state)
+	if err != nil {
+		t.Fatalf("HandleCallback failed: %v", err)
+	}
+
+	// The registration should succeed idempotently by fetching the existing
+	// configuration.
+	if !result.ProviderRegistered {
+		t.Fatal("ProviderRegistered should be true for already-configured location")
+	}
+	if result.ProviderRegistrationError != nil {
+		t.Fatalf("ProviderRegistrationError should be nil, got %v", result.ProviderRegistrationError)
+	}
+
+	// The config must be persisted locally.
+	if len(configRepo.configs) != 1 {
+		t.Fatalf("expected 1 provider config, got %d", len(configRepo.configs))
+	}
+	for _, config := range configRepo.configs {
+		if config.LocationID != "loc-123" {
+			t.Errorf("LocationID = %q, want loc-123", config.LocationID)
+		}
+	}
+}
+
+func TestRegisterProvider_RetrySafe(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: first call to association fails with 500, second call
+	// succeeds. This simulates a transient failure that can be retried.
+	callCount := 0
+	svc, integrationRepo, _, clientRepo, platformRepo, _, configRepo := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/payments/custom-provider/provider":
+			callCount++
+			if callCount == 1 {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"message":"transient error"}`))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"success":true}`))
+		case "/payments/custom-provider/connect":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"success":true}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+
+	clientID := uuid.New()
+	platformID := uuid.New()
+	clientRepo.clients[clientID.String()] = sqlc.Client{ID: clientID, Status: sqlc.ClientStatusACTIVE}
+	platformRepo.platforms[platformID.String()] = sqlc.Platform{ID: platformID, Name: "HighLevel", Slug: "highlevel", Enabled: true}
+
+	// Create the integration directly (simulating a completed OAuth flow).
+	integration, err := integrationRepo.Create(context.Background(), clientID, platformID, "loc-123", sqlc.IntegrationStatusACTIVE)
+	if err != nil {
+		t.Fatalf("create integration: %v", err)
+	}
+
+	// First attempt fails.
+	err = svc.RegisterProvider(context.Background(), integration.ID, "loc-123", "test-access-token")
+	if err == nil {
+		t.Fatal("first RegisterProvider should fail")
+	}
+	if status.Code(err) != codes.Internal {
+		t.Fatalf("first RegisterProvider error code = %s, want %s", status.Code(err), codes.Internal)
+	}
+
+	// No config should be persisted after failure.
+	if len(configRepo.configs) != 0 {
+		t.Fatalf("expected 0 configs after failure, got %d", len(configRepo.configs))
+	}
+
+	// Second attempt succeeds (retry-safe).
+	err = svc.RegisterProvider(context.Background(), integration.ID, "loc-123", "test-access-token")
+	if err != nil {
+		t.Fatalf("second RegisterProvider failed: %v", err)
+	}
+
+	// Config should be persisted after success.
+	if len(configRepo.configs) != 1 {
+		t.Fatalf("expected 1 config after success, got %d", len(configRepo.configs))
+	}
+}
+
+func TestRegisterProvider_MissingLocationID(t *testing.T) {
+	t.Parallel()
+
+	svc, _, _, _, _, _, _ := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	err := svc.RegisterProvider(context.Background(), uuid.New(), "", "test-access-token")
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("error code = %s, want %s", status.Code(err), codes.InvalidArgument)
+	}
+}
+
+func TestRegisterProvider_MissingAccessToken(t *testing.T) {
+	t.Parallel()
+
+	svc, _, _, _, _, _, _ := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	err := svc.RegisterProvider(context.Background(), uuid.New(), "loc-123", "")
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("error code = %s, want %s", status.Code(err), codes.InvalidArgument)
+	}
+}
+
+func TestRegisterProvider_IntegrationNotFound(t *testing.T) {
+	t.Parallel()
+
+	svc, _, _, _, _, _, _ := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	err := svc.RegisterProvider(context.Background(), uuid.New(), "loc-123", "test-access-token")
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("error code = %s, want %s", status.Code(err), codes.NotFound)
+	}
+}
+
+func TestRegisterProvider_NoConfigRepo(t *testing.T) {
+	t.Parallel()
+
+	// Build a service with a nil config repo.
+	registry := providers.NewProviderRegistry()
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "", nil))
+
+	svc := NewService(
+		newMockIntegrationRepo(),
+		newMockOAuthTokenRepo(),
+		newMockClientRepo(),
+		newMockPlatformRepo(),
+		newMockOAuthStateRepo(),
+		nil, // nil config repo
+		registry,
+		"https://example.com/callback",
+		ProviderConfigSettings{},
+		zerolog.Nop(),
+	)
+
+	err := svc.RegisterProvider(context.Background(), uuid.New(), "loc-123", "test-access-token")
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("error code = %s, want %s", status.Code(err), codes.FailedPrecondition)
 	}
 }

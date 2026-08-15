@@ -7,28 +7,29 @@ import (
 
 	clientshttp "github.com/I-Frostbyte/rvpay-go/clients/http"
 	"github.com/I-Frostbyte/rvpay-go/clients/oauth"
+	"github.com/I-Frostbyte/rvpay-go/clients/payments"
 	"github.com/I-Frostbyte/rvpay-go/clients/providers"
 	"github.com/I-Frostbyte/rvpay-go/clients/webhooks"
 	"github.com/rs/zerolog"
 )
 
 // newRuntimeMux builds the exact HTTP mux wiring used by main.go: the
-// grpc-gateway mux at "/", /healthz, and the GHL OAuth/webhook routes. It
-// returns the mux so tests can prove the routes are registered and reachable.
+// grpc-gateway mux at "/", /healthz, and the GHL OAuth/webhook/payment routes.
+// It returns the mux so tests can prove the routes are registered and reachable.
 func newRuntimeMux(t *testing.T) *http.ServeMux {
 	t.Helper()
 
-	// Minimal in-memory repos are not needed for route registration; the
-	// handlers are wired to services that will fail on actual processing but
-	// the routes themselves must be reachable. We use the real service
-	// constructors with nil repos to prove wiring compiles and routes exist.
 	registry := providers.NewProviderRegistry()
-	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", ""))
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "", nil))
 
-	oauthService := oauth.NewService(nil, nil, nil, nil, nil, registry, "https://example.com/callback", zerolog.Nop())
+	oauthService := oauth.NewService(nil, nil, nil, nil, nil, nil, registry, "https://example.com/callback", oauth.ProviderConfigSettings{}, zerolog.Nop())
 	webhookService := webhooks.NewService(nil, nil, nil, nil, registry, zerolog.Nop())
+	// Payment service wired with nil repos for route registration test only.
+	paymentService := payments.NewService(nil, nil, nil, nil, zerolog.Nop())
 	oauthHandler := clientshttp.NewOAuthHandler(oauthService, zerolog.Nop())
 	webhookHandler := clientshttp.NewWebhookHandler(webhookService, zerolog.Nop())
+	paymentQueryHandler := clientshttp.NewPaymentQueryHandler(paymentService, zerolog.Nop())
+	paymentWebhookHandler := clientshttp.NewPaymentWebhookHandler(paymentService, zerolog.Nop())
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -37,6 +38,8 @@ func newRuntimeMux(t *testing.T) *http.ServeMux {
 	})
 	mux.HandleFunc("/oauth/callback", oauthHandler.Callback)
 	mux.HandleFunc("/webhooks/highlevel", webhookHandler.HighLevel)
+	mux.HandleFunc("/payments/custom-provider/query", paymentQueryHandler.Query)
+	mux.HandleFunc("/payments/custom-provider/webhook", paymentWebhookHandler.Payment)
 
 	return mux
 }
@@ -132,5 +135,51 @@ func TestRuntime_WebhookMethodNotAllowed(t *testing.T) {
 
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatalf("webhook GET status = %d, want %d", resp.StatusCode, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestRuntime_PaymentQueryRouteRegistered(t *testing.T) {
+	t.Parallel()
+
+	mux := newRuntimeMux(t)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	// The route must be reachable. A GET (wrong method) should return 405
+	// rather than 404, proving the route is registered.
+	resp, err := http.Get(srv.URL + "/payments/custom-provider/query")
+	if err != nil {
+		t.Fatalf("GET /payments/custom-provider/query: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		t.Fatal("payment query route is not registered (got 404)")
+	}
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("payment query GET status = %d, want %d", resp.StatusCode, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestRuntime_PaymentWebhookRouteRegistered(t *testing.T) {
+	t.Parallel()
+
+	mux := newRuntimeMux(t)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	// The route must be reachable. A GET (wrong method) should return 405
+	// rather than 404, proving the route is registered.
+	resp, err := http.Get(srv.URL + "/payments/custom-provider/webhook")
+	if err != nil {
+		t.Fatalf("GET /payments/custom-provider/webhook: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		t.Fatal("payment webhook route is not registered (got 404)")
+	}
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Fatalf("payment webhook GET status = %d, want %d", resp.StatusCode, http.StatusMethodNotAllowed)
 	}
 }

@@ -13,12 +13,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/I-Frostbyte/rvpay-go/grpc/go/integrationsgrpc"
 	model "github.com/I-Frostbyte/rvpay-go/integrations/config"
 	"github.com/I-Frostbyte/rvpay-go/integrations/db/repo"
 	"github.com/I-Frostbyte/rvpay-go/integrations/integrations"
 	"github.com/I-Frostbyte/rvpay-go/integrations/oauth"
 	"github.com/I-Frostbyte/rvpay-go/integrations/webhook"
-	"github.com/I-Frostbyte/rvpay-go/grpc/go/integrationsgrpc"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/jackc/pgx/v5/pgxpool"

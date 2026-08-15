@@ -22,13 +22,13 @@ import (
 const highLevelTokenURL = "https://services.leadconnectorhq.com/oauth/token"
 
 type Service struct {
-	repo            repo.IntegrationsRepo
-	logger          zerolog.Logger
-	clientID        string
-	clientSecret    string
-	redirectURL     string
-	encryptionKey   []byte
-	httpClient      *http.Client
+	repo          repo.IntegrationsRepo
+	logger        zerolog.Logger
+	clientID      string
+	clientSecret  string
+	redirectURL   string
+	encryptionKey []byte
+	httpClient    *http.Client
 }
 
 func NewService(

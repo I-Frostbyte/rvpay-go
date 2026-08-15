@@ -2,6 +2,8 @@ package oauth
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -12,6 +14,22 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// ProviderConfigSettings holds the configuration used to build the HighLevel
+// Custom Payment Provider configuration. All values come from environment
+// configuration; none are hard-coded.
+type ProviderConfigSettings struct {
+	// Name is the display name of the payment provider.
+	Name string
+	// Description is the description of the payment provider.
+	Description string
+	// ImageURL is the publicly accessible image URL of the payment provider.
+	ImageURL string
+	// PaymentsURL is the frontend checkout URL supplied to HighLevel.
+	PaymentsURL string
+	// QueryURL is the backend query URL supplied to HighLevel.
+	QueryURL string
+}
+
 // Service manages OAuth flows for provider integrations.
 type Service struct {
 	integrationsRepo repo.IntegrationRepo
@@ -19,9 +37,11 @@ type Service struct {
 	clientsRepo      repo.ClientRepo
 	platformsRepo    repo.PlatformRepo
 	oauthStateRepo   repo.OAuthStateRepo
+	configRepo       repo.PaymentProviderConfigRepo
 	registry         providers.ProviderRegistry
 	redirectURI      string
 	stateTTL         time.Duration
+	providerConfig   ProviderConfigSettings
 	logger           zerolog.Logger
 }
 
@@ -30,14 +50,24 @@ type Service struct {
 // come from configuration (HIGHLEVEL_REDIRECT_URI), never be hard-coded.
 // oauthStateRepo persists OAuth state so the callback can securely recover
 // the client/platform context and resist CSRF/replay attacks.
+//
+// configRepo persists the HighLevel Custom Payment Provider configuration
+// created during the registration lifecycle. It may be nil if the provider
+// does not support Custom Payment Provider operations.
+//
+// providerConfig holds the configuration used to build the provider
+// configuration sent to HighLevel. It is only used when the provider supports
+// the payment provider capability.
 func NewService(
 	integrationsRepo repo.IntegrationRepo,
 	oauthRepo repo.OAuthTokenRepo,
 	clientsRepo repo.ClientRepo,
 	platformsRepo repo.PlatformRepo,
 	oauthStateRepo repo.OAuthStateRepo,
+	configRepo repo.PaymentProviderConfigRepo,
 	registry providers.ProviderRegistry,
 	redirectURI string,
+	providerConfig ProviderConfigSettings,
 	logger zerolog.Logger,
 ) *Service {
 	return &Service{
@@ -46,9 +76,11 @@ func NewService(
 		clientsRepo:      clientsRepo,
 		platformsRepo:    platformsRepo,
 		oauthStateRepo:   oauthStateRepo,
+		configRepo:       configRepo,
 		registry:         registry,
 		redirectURI:      redirectURI,
 		stateTTL:         10 * time.Minute,
+		providerConfig:   providerConfig,
 		logger:           logger,
 	}
 }
@@ -181,9 +213,23 @@ type CallbackResult struct {
 	ExpiresAt      time.Time
 	Scope          string
 	ProviderUserID string
+	// ProviderRegistered indicates whether the HighLevel Custom Payment
+	// Provider registration completed successfully during the OAuth callback.
+	// It is false when the provider does not support payment provider
+	// operations or when registration failed (in which case the integration
+	// remains installed and RegisterProvider can be retried).
+	ProviderRegistered bool
+	// ProviderRegistrationError is set when provider registration failed but
+	// the OAuth installation itself succeeded. The integration remains
+	// installed; the error is informational so the caller can decide whether
+	// to surface it or retry registration.
+	ProviderRegistrationError error
 }
 
 // ProcessCallback processes the OAuth callback and creates the integration.
+// After the integration and OAuth token are persisted, it triggers the
+// HighLevel Custom Payment Provider registration lifecycle (provider
+// association and configuration) when the provider supports it.
 func (s *Service) ProcessCallback(ctx context.Context, clientID, platformID uuid.UUID, code, state string) (*CallbackResult, error) {
 	platform, err := s.platformsRepo.GetByID(ctx, platformID)
 	if err == repo.ErrNotFound {
@@ -246,9 +292,7 @@ func (s *Service) ProcessCallback(ctx context.Context, clientID, platformID uuid
 		return nil, translateError(err)
 	}
 
-	s.logger.Info().Str("integration_id", integration.ID.String()).Str("client_id", clientID.String()).Str("platform_id", platformID.String()).Str("provider_user_id", providerUserID).Msg("OAuth callback processed successfully")
-
-	return &CallbackResult{
+	result := &CallbackResult{
 		IntegrationID:  integration.ID,
 		ClientID:       clientID,
 		PlatformID:     platformID,
@@ -257,7 +301,137 @@ func (s *Service) ProcessCallback(ctx context.Context, clientID, platformID uuid
 		ExpiresAt:      expiresAt,
 		Scope:          tokenResp.Scope,
 		ProviderUserID: providerUserID,
-	}, nil
+	}
+
+	// Trigger the HighLevel Custom Payment Provider registration lifecycle.
+	// The OAuth installation is already persisted; registration is a
+	// best-effort follow-up that must not roll back the installation.
+	if provider.HasCapability(providers.CapabilityPaymentProvider) {
+		regErr := s.RegisterProvider(ctx, integration.ID, providerUserID, tokenResp.AccessToken)
+		if regErr != nil {
+			s.logger.Warn().Err(regErr).Str("integration_id", integration.ID.String()).Str("location_id", providerUserID).Msg("HighLevel provider registration failed; integration remains installed")
+			result.ProviderRegistrationError = regErr
+		} else {
+			result.ProviderRegistered = true
+		}
+	}
+
+	s.logger.Info().Str("integration_id", integration.ID.String()).Str("client_id", clientID.String()).Str("platform_id", platformID.String()).Str("provider_user_id", providerUserID).Bool("provider_registered", result.ProviderRegistered).Msg("OAuth callback processed successfully")
+
+	return result, nil
+}
+
+// RegisterProvider performs the HighLevel Custom Payment Provider registration
+// lifecycle for an installed integration. It:
+//
+//  1. Creates the provider association (POST /payments/custom-provider/provider).
+//  2. Creates the provider configuration (POST /payments/custom-provider/connect).
+//  3. Persists the provider configuration locally.
+//
+// The operation is idempotent: if the provider is already associated or
+// configured, the existing configuration is fetched and persisted instead of
+// creating a duplicate. Registration failures return a typed error; the
+// integration remains installed and the operation can be retried safely.
+func (s *Service) RegisterProvider(ctx context.Context, integrationID uuid.UUID, locationID, accessToken string) error {
+	if s.configRepo == nil {
+		return ErrProviderConfigRepoNotConfigured
+	}
+	if locationID == "" {
+		return ErrMissingLocationID
+	}
+	if accessToken == "" {
+		return ErrMissingAccessToken
+	}
+
+	integration, err := s.integrationsRepo.GetByID(ctx, integrationID)
+	if err == repo.ErrNotFound {
+		return ErrIntegrationNotFound
+	}
+	if err != nil {
+		return translateError(err)
+	}
+
+	platform, err := s.platformsRepo.GetByID(ctx, integration.PlatformID)
+	if err == repo.ErrNotFound {
+		return ErrPlatformNotFound
+	}
+	if err != nil {
+		return translateError(err)
+	}
+
+	provider, ok := s.registry.Get(platform.Slug)
+	if !ok {
+		return ErrProviderNotSupported
+	}
+
+	paymentClient := provider.PaymentProvider()
+	if paymentClient == nil {
+		return ErrPaymentProviderNotSupported
+	}
+
+	// Step 1: Create the provider association. If the provider is already
+	// associated, HighLevel may return a 400/422; we treat that as idempotent
+	// and continue to the configuration step.
+	err = paymentClient.CreateProviderAssociation(ctx, accessToken, locationID)
+	if err != nil {
+		if errors.Is(err, providers.ErrBadRequest) || errors.Is(err, providers.ErrUnprocessableEntity) {
+			s.logger.Info().Str("integration_id", integrationID.String()).Str("location_id", locationID).Msg("provider association already exists; continuing with configuration")
+		} else {
+			return ErrProviderAssociationFailed
+		}
+	}
+
+	// Step 2: Create the provider configuration. If the configuration already
+	// exists, fetch the existing configuration instead of creating a duplicate.
+	config := providers.ProviderConfig{
+		Name:                         s.providerConfig.Name,
+		Description:                  s.providerConfig.Description,
+		ImageURL:                     s.providerConfig.ImageURL,
+		LocationID:                   locationID,
+		QueryURL:                     s.providerConfig.QueryURL,
+		PaymentsURL:                  s.providerConfig.PaymentsURL,
+		SupportsSubscriptionSchedule: false, // RVPay supports one-time payments only.
+	}
+
+	err = paymentClient.CreateProviderConfig(ctx, accessToken, config)
+	if err != nil {
+		if errors.Is(err, providers.ErrBadRequest) || errors.Is(err, providers.ErrUnprocessableEntity) {
+			// The configuration may already exist. Fetch the existing
+			// configuration to confirm and persist it locally.
+			s.logger.Info().Str("integration_id", integrationID.String()).Str("location_id", locationID).Msg("provider config may already exist; fetching existing configuration")
+			existing, fetchErr := paymentClient.FetchProviderConfig(ctx, accessToken, locationID)
+			if fetchErr != nil {
+				return ErrProviderConfigFailed
+			}
+			config = *existing
+		} else {
+			return ErrProviderConfigFailed
+		}
+	}
+
+	// Step 3: Persist the provider configuration locally. The provider API key
+	// is a generated random value used to authenticate HighLevel query
+	// requests; it is distinct from the OAuth access token and the pawaPay
+	// API key.
+	apiKey, err := generateAPIKey()
+	if err != nil {
+		return ErrAPIKeyGenerationFailed
+	}
+
+	_, err = s.configRepo.Create(ctx, integrationID, config.Name, config.Description, config.ImageURL, config.LocationID, config.QueryURL, config.PaymentsURL, config.SupportsSubscriptionSchedule, apiKey)
+	if err == repo.ErrDuplicate {
+		// The config already exists locally; update it instead.
+		_, err = s.configRepo.Update(ctx, integrationID, config.Name, config.Description, config.ImageURL, config.LocationID, config.QueryURL, config.PaymentsURL, config.SupportsSubscriptionSchedule, apiKey)
+		if err != nil {
+			return translateError(err)
+		}
+	} else if err != nil {
+		return translateError(err)
+	}
+
+	s.logger.Info().Str("integration_id", integrationID.String()).Str("location_id", locationID).Msg("HighLevel provider registration completed")
+
+	return nil
 }
 
 // RefreshAccessToken refreshes an OAuth access token for an integration.
@@ -357,4 +531,15 @@ func (s *Service) ValidateToken(ctx context.Context, integrationID uuid.UUID) (b
 	}
 
 	return valid, nil
+}
+
+// generateAPIKey generates a cryptographically random API key used to
+// authenticate HighLevel payment query requests. It is distinct from the
+// OAuth access token and the pawaPay API key.
+func generateAPIKey() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
 }
