@@ -160,7 +160,7 @@ func (p *HighLevelProvider) ExchangeCode(ctx context.Context, code string, redir
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token exchange failed: %s", string(body))
+		return nil, fmt.Errorf("token exchange failed: %s", sanitizeErrorBody(body))
 	}
 
 	var tokenResp struct {
@@ -209,7 +209,7 @@ func (p *HighLevelProvider) RefreshToken(ctx context.Context, refreshToken strin
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token refresh failed: %s", string(body))
+		return nil, fmt.Errorf("token refresh failed: %s", sanitizeErrorBody(body))
 	}
 
 	var tokenResp struct {
@@ -252,7 +252,7 @@ func (p *HighLevelProvider) GetUserInfo(ctx context.Context, accessToken string)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("user info request failed: %s", string(body))
+		return "", fmt.Errorf("user info request failed: %s", sanitizeErrorBody(body))
 	}
 
 	var userInfo struct {

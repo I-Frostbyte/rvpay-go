@@ -213,12 +213,40 @@ func (c *HighLevelPaymentProviderClient) doJSON(ctx context.Context, method, pat
 	}
 }
 
+// credentialFields are JSON field names whose values must be redacted from
+// error messages to prevent credential leakage.
+var credentialFields = []string{
+	"access_token",
+	"refresh_token",
+	"client_secret",
+	"apiKey",
+	"api_key",
+}
+
 // sanitizeErrorBody truncates and sanitizes an error response body so that
-// sensitive data (including access tokens) is never leaked into errors.
+// sensitive data (including access tokens, refresh tokens, and API keys) is
+// never leaked into errors. It attempts to parse the body as JSON and redact
+// known credential fields. If parsing fails, it falls back to length-limited
+// plain-text truncation.
 func sanitizeErrorBody(body []byte) string {
 	if len(body) == 0 {
 		return "empty response body"
 	}
+
+	// Attempt to redact credential fields from JSON bodies.
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err == nil {
+		for _, field := range credentialFields {
+			if _, ok := raw[field]; ok {
+				raw[field] = "[REDACTED]"
+			}
+		}
+		sanitized, err := json.Marshal(raw)
+		if err == nil {
+			body = sanitized
+		}
+	}
+
 	// Truncate to a reasonable length to avoid leaking large payloads.
 	if len(body) > 512 {
 		body = body[:512]

@@ -514,6 +514,120 @@ func TestAccessTokenNotInLogs(t *testing.T) {
 	}
 }
 
+func TestSanitizeErrorBody_Empty(t *testing.T) {
+	t.Parallel()
+
+	got := sanitizeErrorBody([]byte{})
+	if got != "empty response body" {
+		t.Fatalf("expected 'empty response body', got %q", got)
+	}
+}
+
+func TestSanitizeErrorBody_PlainText(t *testing.T) {
+	t.Parallel()
+
+	got := sanitizeErrorBody([]byte("something went wrong"))
+	if got != "something went wrong" {
+		t.Fatalf("expected 'something went wrong', got %q", got)
+	}
+}
+
+func TestSanitizeErrorBody_RedactsAccessToken(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{"error":"invalid_grant","error_description":"bad token","access_token":"super-secret"}`)
+	got := sanitizeErrorBody(body)
+
+	if strings.Contains(got, "super-secret") {
+		t.Fatalf("access_token leaked into sanitized error body: %s", got)
+	}
+	if !strings.Contains(got, "[REDACTED]") {
+		t.Fatalf("expected [REDACTED] in sanitized body, got: %s", got)
+	}
+}
+
+func TestSanitizeErrorBody_RedactsRefreshToken(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{"error":"invalid_grant","refresh_token":"rt-12345"}`)
+	got := sanitizeErrorBody(body)
+
+	if strings.Contains(got, "rt-12345") {
+		t.Fatalf("refresh_token leaked into sanitized error body: %s", got)
+	}
+	if !strings.Contains(got, "[REDACTED]") {
+		t.Fatalf("expected [REDACTED] in sanitized body, got: %s", got)
+	}
+}
+
+func TestSanitizeErrorBody_RedactsClientSecret(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{"error":"invalid_client","client_secret":"my-secret"}`)
+	got := sanitizeErrorBody(body)
+
+	if strings.Contains(got, "my-secret") {
+		t.Fatalf("client_secret leaked into sanitized error body: %s", got)
+	}
+	if !strings.Contains(got, "[REDACTED]") {
+		t.Fatalf("expected [REDACTED] in sanitized body, got: %s", got)
+	}
+}
+
+func TestSanitizeErrorBody_RedactsAPIKey(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{"error":"invalid_key","apiKey":"pk-12345"}`)
+	got := sanitizeErrorBody(body)
+
+	if strings.Contains(got, "pk-12345") {
+		t.Fatalf("apiKey leaked into sanitized error body: %s", got)
+	}
+	if !strings.Contains(got, "[REDACTED]") {
+		t.Fatalf("expected [REDACTED] in sanitized body, got: %s", got)
+	}
+}
+
+func TestSanitizeErrorBody_RedactsAPIKeySnake(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{"error":"invalid_key","api_key":"sk-12345"}`)
+	got := sanitizeErrorBody(body)
+
+	if strings.Contains(got, "sk-12345") {
+		t.Fatalf("api_key leaked into sanitized error body: %s", got)
+	}
+	if !strings.Contains(got, "[REDACTED]") {
+		t.Fatalf("expected [REDACTED] in sanitized body, got: %s", got)
+	}
+}
+
+func TestSanitizeErrorBody_NonJSON(t *testing.T) {
+	t.Parallel()
+
+	body := []byte("this is not json with access_token=secret")
+	got := sanitizeErrorBody(body)
+	// Non-JSON bodies should still be truncated, but credential field names
+	// won't be redacted since we can't parse them safely.
+	if !strings.Contains(got, "access_token=secret") {
+		t.Fatalf("non-JSON body should be preserved as-is: %s", got)
+	}
+}
+
+func TestSanitizeErrorBody_TruncatesLongBodies(t *testing.T) {
+	t.Parallel()
+
+	// Generate a body longer than 512 bytes.
+	longBody := make([]byte, 600)
+	for i := range longBody {
+		longBody[i] = 'a'
+	}
+	got := sanitizeErrorBody(longBody)
+	if len(got) > 512 {
+		t.Fatalf("sanitized body length = %d, want <= 512", len(got))
+	}
+}
+
 func TestHighLevelProviderPaymentProviderCapability(t *testing.T) {
 	t.Parallel()
 

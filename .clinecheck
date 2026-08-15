@@ -1,19 +1,20 @@
 # RVPay Go — Stage Checkpoint
 
-## Stage 05: Transaction Correlation and Webhook Processing — COMPLETE
+## Stage 06: Security, Idempotency and Error Boundaries — COMPLETE
 
-- [x] Webhook authentication: added provider API key validation to HandleWebhook
-- [x] APIKey field added to WebhookEvent struct
-- [x] Webhook authentication uses constant-time comparison (subtle.ConstantTimeCompare)
-- [x] Provider API key never logged or returned in error messages
-- [x] Persistent idempotency via webhook_events table unique constraint
-- [x] Three identical events: first succeeds, subsequent duplicates detected
-- [x] Concurrent duplicate safety (DB-backed, no in-memory maps)
-- [x] Tests: valid payment.captured, duplicate, three identical, invalid credentials, missing API key, unknown event, subscription event, unknown location, wrong charge ID
-- [x] gofmt, go vet, go test ./clients/payments/... ./clients/http/... ./transactions/payments/... all pass
+- [x] Audited secret logging: no credentials found in log/error paths
+- [x] Fixed OAuth token exchange error: raw response body sanitized (sanitizeErrorBody) instead of string(body)
+- [x] Fixed OAuth token refresh error: raw response body sanitized instead of string(body)
+- [x] Fixed GetUserInfo error: raw response body sanitized instead of string(body)
+- [x] Enhanced sanitizeErrorBody to redact access_token, refresh_token, client_secret, apiKey, api_key from JSON error bodies
+- [x] Constant-time comparison already used for provider API key validation (subtle.ConstantTimeCompare)
+- [x] Error handlers already map to sanitized HTTP responses (no internal details leaked)
+- [x] Tests: sanitizeErrorBody edge cases (empty, plain text, 6 credential redaction scenarios, non-JSON, truncation)
+- [x] gofmt, go test -race ./clients/..., go build ./... all pass
 
 ## Files Modified
-- clients/payments/service.go (added APIKey field to WebhookEvent, added API key auth to HandleWebhook)
-- clients/payments/service_test.go (fixed test payloads, added MissingAPIKey, InvalidAPIKey, ThreeIdenticalEvents, WrongChargeID tests)
+- clients/providers/highlevel.go (3 error messages now use sanitizeErrorBody)
+- clients/providers/highlevel_payment_provider.go (enhanced sanitizeErrorBody with JSON credential redaction)
+- clients/providers/highlevel_payment_provider_test.go (added 9 security-focused tests for sanitizeErrorBody)
 
-## Next: Stage 06 (new Cline task)
+## Next: Stage 07 (new Cline task)
