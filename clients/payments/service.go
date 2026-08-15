@@ -46,6 +46,7 @@ type WebhookEvent struct {
 	LocationID    string                 `json:"locationId"`
 	ChargeID      string                 `json:"chargeId"`
 	TransactionID string                 `json:"transactionId"`
+	APIKey        string                 `json:"apiKey"`
 	Data          map[string]interface{} `json:"data"`
 }
 
@@ -152,10 +153,11 @@ func (s *Service) handleVerify(ctx context.Context, config sqlc.PaymentProviderC
 	}, nil
 }
 
-// HandleWebhook processes a HighLevel payment-provider webhook event. It is
-// idempotent: duplicate deliveries are detected via the webhook_events table
-// unique constraint and acknowledged without reprocessing. Payment-domain
-// business processing is delegated to the Transactions service.
+// HandleWebhook processes a HighLevel payment-provider webhook event. It
+// authenticates the request using the provider API key, enforces idempotency
+// via the webhook_events table unique constraint, and delegates payment-domain
+// business processing to the Transactions service. The provider API key is
+// never logged or returned in error messages.
 func (s *Service) HandleWebhook(ctx context.Context, body []byte) error {
 	var event WebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
@@ -176,6 +178,17 @@ func (s *Service) HandleWebhook(ctx context.Context, body []byte) error {
 			return ErrProviderConfigNotFound
 		}
 		return translateError(err)
+	}
+
+	// Authenticate the webhook request using the provider API key. The key is
+	// validated against the stored config using constant-time comparison to
+	// avoid timing side-channels. The key is never logged or returned in
+	// errors.
+	if strings.TrimSpace(event.APIKey) == "" {
+		return ErrMissingAPIKey
+	}
+	if subtle.ConstantTimeCompare([]byte(config.ProviderApiKey), []byte(event.APIKey)) != 1 {
+		return ErrInvalidAPIKey
 	}
 
 	integration, err := s.integrationRepo.GetByID(ctx, config.IntegrationID)

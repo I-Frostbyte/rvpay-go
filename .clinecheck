@@ -1,22 +1,19 @@
 # RVPay Go — Stage Checkpoint
 
-## Stage 04: Transactions Payment-Provider Backend Contract — COMPLETE
+## Stage 05: Transaction Correlation and Webhook Processing — COMPLETE
 
-- [x] VerifyPayment supports chargeId fallback lookup
-- [x] VerifyPayment rejects subscriptionId (one-time payments only)
-- [x] Protobuf: added ghl_charge_id and subscription_id to VerifyPaymentRequest
-- [x] Clients adapter passes chargeId and subscriptionId to Transactions
-- [x] Clients adapter maps FailedPrecondition/InvalidArgument from Transactions
-- [x] Tests: verify success/failure/pending/unknown, chargeId fallback, chargeId-only, subscription rejected, malformed request, unsupported type, unsupported method, auth failure
-- [x] gofmt, go vet, go test ./transactions/... ./clients/... all pass
+- [x] Webhook authentication: added provider API key validation to HandleWebhook
+- [x] APIKey field added to WebhookEvent struct
+- [x] Webhook authentication uses constant-time comparison (subtle.ConstantTimeCompare)
+- [x] Provider API key never logged or returned in error messages
+- [x] Persistent idempotency via webhook_events table unique constraint
+- [x] Three identical events: first succeeds, subsequent duplicates detected
+- [x] Concurrent duplicate safety (DB-backed, no in-memory maps)
+- [x] Tests: valid payment.captured, duplicate, three identical, invalid credentials, missing API key, unknown event, subscription event, unknown location, wrong charge ID
+- [x] gofmt, go vet, go test ./clients/payments/... ./clients/http/... ./transactions/payments/... all pass
 
 ## Files Modified
-- protobuf/transactions.proto
-- transactions/payments/service.go
-- transactions/payments/service_test.go
-- clients/payments/service.go
-- clients/payments/errors.go
-- clients/payments/service_test.go
-- clients/http/payment_query_handler_test.go
+- clients/payments/service.go (added APIKey field to WebhookEvent, added API key auth to HandleWebhook)
+- clients/payments/service_test.go (fixed test payloads, added MissingAPIKey, InvalidAPIKey, ThreeIdenticalEvents, WrongChargeID tests)
 
-## Next: Stage 05 (new Cline task)
+## Next: Stage 06 (new Cline task)

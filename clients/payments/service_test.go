@@ -364,9 +364,15 @@ func TestHandleWebhook_InvalidPayload(t *testing.T) {
 }
 
 func TestHandleWebhook_MissingEventID(t *testing.T) {
-	svc, _, _, _, _ := newTestService()
+	svc, configRepo, _, _, _ := newTestService()
+	integrationID := uuid.New()
+	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
+		IntegrationID:  integrationID,
+		LocationID:     "loc-1",
+		ProviderApiKey: "valid-key",
+	}
 
-	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"payment.captured","locationId":"loc-1"}`))
+	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"payment.captured","locationId":"loc-1","apiKey":"valid-key"}`))
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("expected InvalidArgument, got %v", status.Code(err))
 	}
@@ -375,7 +381,7 @@ func TestHandleWebhook_MissingEventID(t *testing.T) {
 func TestHandleWebhook_UnknownLocation(t *testing.T) {
 	svc, _, _, _, _ := newTestService()
 
-	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"unknown-loc"}`))
+	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"unknown-loc","apiKey":"some-key"}`))
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("expected NotFound, got %v", status.Code(err))
 	}
@@ -395,7 +401,7 @@ func TestHandleWebhook_PaymentCaptured(t *testing.T) {
 	}
 	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{Success: true}
 
-	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"loc-1","transactionId":"txn-1","chargeId":"charge-1"}`))
+	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"loc-1","transactionId":"txn-1","chargeId":"charge-1","apiKey":"valid-key"}`))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -415,7 +421,7 @@ func TestHandleWebhook_DuplicateEvent(t *testing.T) {
 	}
 	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{Success: true}
 
-	body := []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"loc-1","transactionId":"txn-1","chargeId":"charge-1"}`)
+	body := []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"loc-1","transactionId":"txn-1","chargeId":"charge-1","apiKey":"valid-key"}`)
 
 	// First delivery succeeds.
 	if err := svc.HandleWebhook(context.Background(), body); err != nil {
@@ -426,6 +432,70 @@ func TestHandleWebhook_DuplicateEvent(t *testing.T) {
 	err := svc.HandleWebhook(context.Background(), body)
 	if status.Code(err) != codes.AlreadyExists {
 		t.Fatalf("expected AlreadyExists for duplicate, got %v", status.Code(err))
+	}
+}
+
+func TestHandleWebhook_MissingAPIKey(t *testing.T) {
+	svc, configRepo, _, _, _ := newTestService()
+	integrationID := uuid.New()
+	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
+		IntegrationID:  integrationID,
+		LocationID:     "loc-1",
+		ProviderApiKey: "valid-key",
+	}
+
+	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"loc-1"}`))
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument for missing API key, got %v", status.Code(err))
+	}
+}
+
+func TestHandleWebhook_InvalidAPIKey(t *testing.T) {
+	svc, configRepo, _, _, _ := newTestService()
+	integrationID := uuid.New()
+	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
+		IntegrationID:  integrationID,
+		LocationID:     "loc-1",
+		ProviderApiKey: "valid-key",
+	}
+
+	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"loc-1","apiKey":"wrong-key"}`))
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("expected Unauthenticated for invalid API key, got %v", status.Code(err))
+	}
+}
+
+func TestHandleWebhook_ThreeIdenticalEvents(t *testing.T) {
+	svc, configRepo, integrationRepo, _, txClient := newTestService()
+	integrationID := uuid.New()
+	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
+		IntegrationID:  integrationID,
+		LocationID:     "loc-1",
+		ProviderApiKey: "valid-key",
+	}
+	integrationRepo.integrations[integrationID.String()] = sqlc.Integration{
+		ID:     integrationID,
+		Status: sqlc.IntegrationStatusACTIVE,
+	}
+	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{Success: true}
+
+	body := []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"loc-1","transactionId":"txn-1","chargeId":"charge-1","apiKey":"valid-key"}`)
+
+	// First delivery succeeds.
+	if err := svc.HandleWebhook(context.Background(), body); err != nil {
+		t.Fatalf("first delivery failed: %v", err)
+	}
+
+	// Second delivery is duplicate.
+	err := svc.HandleWebhook(context.Background(), body)
+	if status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("expected AlreadyExists for second delivery, got %v", status.Code(err))
+	}
+
+	// Third delivery is also duplicate.
+	err = svc.HandleWebhook(context.Background(), body)
+	if status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("expected AlreadyExists for third delivery, got %v", status.Code(err))
 	}
 }
 
@@ -443,8 +513,31 @@ func TestHandleWebhook_UnknownEventType(t *testing.T) {
 	}
 
 	// Unknown event types are acknowledged safely without processing.
-	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"subscription.active","eventId":"evt-2","locationId":"loc-1"}`))
+	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"subscription.active","eventId":"evt-2","locationId":"loc-1","apiKey":"valid-key"}`))
 	if err != nil {
 		t.Fatalf("unexpected error for unknown event type: %v", err)
+	}
+}
+
+func TestHandleWebhook_WrongChargeID(t *testing.T) {
+	svc, configRepo, integrationRepo, _, txClient := newTestService()
+	integrationID := uuid.New()
+	configRepo.configs[integrationID.String()] = sqlc.PaymentProviderConfig{
+		IntegrationID:  integrationID,
+		LocationID:     "loc-1",
+		ProviderApiKey: "valid-key",
+	}
+	integrationRepo.integrations[integrationID.String()] = sqlc.Integration{
+		ID:     integrationID,
+		Status: sqlc.IntegrationStatusACTIVE,
+	}
+	txClient.verifyResults["txn-1"] = &transactionsgrpc.VerifyPaymentResponse{Success: true}
+
+	// A payment.captured event with a transaction ID that resolves but a
+	// charge ID that doesn't match the deposit is still processed; the
+	// charge ID is recorded as a reference. This is not an error condition.
+	err := svc.HandleWebhook(context.Background(), []byte(`{"eventType":"payment.captured","eventId":"evt-1","locationId":"loc-1","transactionId":"txn-1","chargeId":"wrong-charge","apiKey":"valid-key"}`))
+	if err != nil {
+		t.Fatalf("unexpected error for wrong charge ID: %v", err)
 	}
 }
