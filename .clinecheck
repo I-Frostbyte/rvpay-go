@@ -1,21 +1,20 @@
 # RVPay Go — Stage Checkpoint
 
-## Stage 08: End-to-End Local Integration Tests — COMPLETE
+## Stage 09: Real HighLevel / Render Connectivity Readiness — COMPLETE
 
-- [x] Runtime route registration tests for payment query/webhook endpoints
-- [x] Provider configuration verification test (already existed in oauth tests)
-- [x] PawaPay boundary test (Clients never calls pawaPay)
-- [x] Concurrent webhook idempotency test with race detection
-- [x] go test ./clients/... — PASS
-- [x] go test -race ./clients/... — PASS
-- [x] go vet ./clients/... — PASS
+- [x] Added required HighLevel scopes documentation to README
+- [x] Created operator connectivity checklist (clients/docs/connectivity-checklist.md)
+- [x] Render deployment configuration verified (render.yaml, .env.example, Dockerfile)
+- [x] Provider registration lifecycle confirmed implemented
+- [x] Query/webhook/payment URLs configurable via env vars (no hard-coded hostnames)
 - [x] go build ./clients/... — PASS
+- [x] go vet ./clients/... — PASS
+- [x] go test ./clients/... — PASS
 
 ## Files Created
-- clients/payments/pawapay_test.go (pawaPay boundary enforcement via import analysis)
+- clients/docs/connectivity-checklist.md (20-step operator verification procedure)
 
 ## Files Modified
-- clients/payments/service_test.go (added concurrent idempotency tests, nil/empty request tests)
-- clients/cmd/grpc-service/runtime_test.go (added payment query/webhook route registration tests)
+- clients/README.md (added Required Marketplace Scopes documentation)
 
-## Next: Stage 09 (new Cline task)
+## Next: Stage 10 (new Cline task)
