@@ -128,7 +128,7 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 		},
 		logger,
 	)
-	webhookService := webhooks.NewService(integrationRepo, webhookSubscriptionRepo, webhookEventRepo, platformRepo, providerRegistry, logger)
+	webhookService := webhooks.NewService(integrationRepo, webhookSubscriptionRepo, webhookEventRepo, platformRepo, paymentProviderConfigRepo, providerRegistry, logger)
 	oauthHandler := clientshttp.NewOAuthHandler(oauthService, logger)
 	webhookHandler := clientshttp.NewWebhookHandler(webhookService, logger)
 

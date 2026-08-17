@@ -15,12 +15,13 @@ import (
 
 // Service manages webhook lifecycle for provider integrations.
 type Service struct {
-	integrationsRepo repo.IntegrationRepo
-	webhookRepo      repo.WebhookSubscriptionRepo
-	webhookEventRepo repo.WebhookEventRepo
-	platformsRepo    repo.PlatformRepo
-	registry         providers.ProviderRegistry
-	logger           zerolog.Logger
+	integrationsRepo          repo.IntegrationRepo
+	webhookRepo               repo.WebhookSubscriptionRepo
+	webhookEventRepo          repo.WebhookEventRepo
+	platformsRepo             repo.PlatformRepo
+	paymentProviderConfigRepo repo.PaymentProviderConfigRepo
+	registry                  providers.ProviderRegistry
+	logger                    zerolog.Logger
 }
 
 // NewService creates a new webhook service.
@@ -29,16 +30,18 @@ func NewService(
 	webhookRepo repo.WebhookSubscriptionRepo,
 	webhookEventRepo repo.WebhookEventRepo,
 	platformsRepo repo.PlatformRepo,
+	paymentProviderConfigRepo repo.PaymentProviderConfigRepo,
 	registry providers.ProviderRegistry,
 	logger zerolog.Logger,
 ) *Service {
 	return &Service{
-		integrationsRepo: integrationsRepo,
-		webhookRepo:      webhookRepo,
-		webhookEventRepo: webhookEventRepo,
-		platformsRepo:    platformsRepo,
-		registry:         registry,
-		logger:           logger,
+		integrationsRepo:          integrationsRepo,
+		webhookRepo:               webhookRepo,
+		webhookEventRepo:          webhookEventRepo,
+		platformsRepo:             platformsRepo,
+		paymentProviderConfigRepo: paymentProviderConfigRepo,
+		registry:                  registry,
+		logger:                    logger,
 	}
 }
 
@@ -164,9 +167,24 @@ func (s *Service) ProcessWebhook(ctx context.Context, providerID string, headers
 		return ErrInvalidPayload
 	}
 
-	integrationID, err := uuid.Parse(event.IntegrationID)
-	if err != nil {
-		return ErrInvalidPayload
+	// For HighLevel webhooks, the GHL appId is NOT an RVPay UUID. Resolve the
+	// actual RVPay integration UUID through the payment_provider_configs table
+	// using the locationId captured during OAuth.
+	var integrationID uuid.UUID
+	if providerID == "highlevel" && event.LocationID != "" {
+		config, err := s.paymentProviderConfigRepo.GetByLocationID(ctx, event.LocationID)
+		if err == repo.ErrNotFound {
+			return ErrIntegrationNotFound
+		}
+		if err != nil {
+			return translateError(err)
+		}
+		integrationID = config.IntegrationID
+	} else {
+		integrationID, err = uuid.Parse(event.IntegrationID)
+		if err != nil {
+			return ErrInvalidPayload
+		}
 	}
 
 	webhook, err := s.webhookRepo.GetByIntegrationIDAndEndpoint(ctx, integrationID, "")

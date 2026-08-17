@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // HighLevelWebhookProvider implements WebhookProvider for HighLevel.
@@ -60,28 +61,53 @@ func (p *HighLevelWebhookProvider) VerifyRequest(ctx context.Context, headers ma
 }
 
 // ParseEvent converts a provider payload into a normalized WebhookEvent.
+//
+// HighLevel webhook payloads use the GHL schema:
+//
+//	{
+//	  "type": "INSTALL",
+//	  "appId": "...",
+//	  "locationId": "...",
+//	  "companyId": "...",
+//	  "timestamp": "2026-08-17T09:06:59.366Z",
+//	  "webhookId": "..."
+//	}
+//
+// Mapping:
+//   - type → EventType
+//   - webhookId → ProviderEventID
+//   - appId → IntegrationID (GHL Marketplace app ID, NOT an RVPay UUID)
+//   - companyId → ClientID
+//   - locationId → LocationID
 func (p *HighLevelWebhookProvider) ParseEvent(ctx context.Context, body []byte) (*WebhookEvent, error) {
 	var payload struct {
-		EventID       string                 `json:"eventId"`
-		EventType     string                 `json:"eventType"`
-		IntegrationID string                 `json:"integrationId"`
-		ClientID      string                 `json:"clientId"`
-		Data          map[string]interface{} `json:"data"`
-		Timestamp     int64                  `json:"timestamp"`
+		Type         string                 `json:"type"`
+		AppID        string                 `json:"appId"`
+		LocationID   string                 `json:"locationId"`
+		CompanyID    string                 `json:"companyId"`
+		Data         map[string]interface{} `json:"data"`
+		Timestamp    string                 `json:"timestamp"`
+		WebhookID    string                 `json:"webhookId"`
 	}
 
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, fmt.Errorf("failed to parse webhook payload: %w", err)
 	}
 
+	timestamp, err := time.Parse(time.RFC3339Nano, payload.Timestamp)
+	if err != nil {
+		return nil, fmt.Errorf("invalid webhook timestamp: %w", err)
+	}
+
 	event := &WebhookEvent{
 		Provider:        "highlevel",
-		EventType:       payload.EventType,
-		ProviderEventID: payload.EventID,
-		IntegrationID:   payload.IntegrationID,
-		ClientID:        payload.ClientID,
+		EventType:       payload.Type,
+		ProviderEventID: payload.WebhookID,
+		IntegrationID:   payload.AppID,
+		ClientID:        payload.CompanyID,
+		LocationID:      payload.LocationID,
 		Payload:         payload.Data,
-		ReceivedAt:      payload.Timestamp,
+		ReceivedAt:      timestamp.Unix(),
 	}
 
 	return event, nil
@@ -179,9 +205,9 @@ func (d *HighLevelWebhookDispatcher) Dispatch(ctx context.Context, event *Webhoo
 	d.logger.Info("Dispatching webhook event", "provider", event.Provider, "event_type", event.EventType, "event_id", event.ProviderEventID)
 
 	switch event.EventType {
-	case "integration.installed":
+	case "INSTALL", "integration.installed":
 		return d.handleIntegrationInstalled(ctx, event)
-	case "integration.uninstalled":
+	case "UNINSTALL", "integration.uninstalled":
 		return d.handleIntegrationUninstalled(ctx, event)
 	case "oauth.revoked":
 		return d.handleOAuthRevoked(ctx, event)

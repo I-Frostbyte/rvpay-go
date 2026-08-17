@@ -23,7 +23,7 @@ func newRuntimeMux(t *testing.T) *http.ServeMux {
 	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "", nil))
 
 	oauthService := oauth.NewService(nil, nil, nil, nil, nil, nil, registry, "https://example.com/callback", oauth.ProviderConfigSettings{}, zerolog.Nop())
-	webhookService := webhooks.NewService(nil, nil, nil, nil, registry, zerolog.Nop())
+	webhookService := webhooks.NewService(nil, nil, nil, nil, nil, registry, zerolog.Nop())
 	// Payment service wired with nil repos for route registration test only.
 	paymentService := payments.NewService(nil, nil, nil, nil, zerolog.Nop())
 	oauthHandler := clientshttp.NewOAuthHandler(oauthService, zerolog.Nop())

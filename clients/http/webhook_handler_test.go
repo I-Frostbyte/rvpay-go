@@ -146,6 +146,40 @@ func (m *testWebhookIntegrationRepo) UpdateLastSyncAt(ctx context.Context, id uu
 }
 func (m *testWebhookIntegrationRepo) Delete(ctx context.Context, id uuid.UUID) error { return nil }
 
+// testPaymentProviderConfigRepo is an in-memory PaymentProviderConfigRepo for
+// handler tests.
+type testPaymentProviderConfigRepo struct {
+	configs map[string]sqlc.PaymentProviderConfig
+}
+
+func newTestPaymentProviderConfigRepo() *testPaymentProviderConfigRepo {
+	return &testPaymentProviderConfigRepo{configs: make(map[string]sqlc.PaymentProviderConfig)}
+}
+
+func (m *testPaymentProviderConfigRepo) Create(ctx context.Context, integrationID uuid.UUID, providerName, providerDescription, providerImageURL, locationID, queryURL, paymentsURL string, supportsSubscriptionSchedule bool, providerAPIKey string) (sqlc.PaymentProviderConfig, error) {
+	return sqlc.PaymentProviderConfig{}, nil
+}
+func (m *testPaymentProviderConfigRepo) GetByIntegrationID(ctx context.Context, integrationID uuid.UUID) (sqlc.PaymentProviderConfig, error) {
+	return sqlc.PaymentProviderConfig{}, repo.ErrNotFound
+}
+func (m *testPaymentProviderConfigRepo) GetByLocationID(ctx context.Context, locationID string) (sqlc.PaymentProviderConfig, error) {
+	for _, c := range m.configs {
+		if c.LocationID == locationID {
+			return c, nil
+		}
+	}
+	return sqlc.PaymentProviderConfig{}, repo.ErrNotFound
+}
+func (m *testPaymentProviderConfigRepo) GetByAPIKey(ctx context.Context, apiKey string) (sqlc.PaymentProviderConfig, error) {
+	return sqlc.PaymentProviderConfig{}, repo.ErrNotFound
+}
+func (m *testPaymentProviderConfigRepo) Update(ctx context.Context, integrationID uuid.UUID, providerName, providerDescription, providerImageURL, locationID, queryURL, paymentsURL string, supportsSubscriptionSchedule bool, providerAPIKey string) (sqlc.PaymentProviderConfig, error) {
+	return sqlc.PaymentProviderConfig{}, nil
+}
+func (m *testPaymentProviderConfigRepo) Delete(ctx context.Context, integrationID uuid.UUID) error {
+	return nil
+}
+
 // testWebhookPlatformRepo is an in-memory PlatformRepo for handler tests.
 type testWebhookPlatformRepo struct {
 	platforms map[string]sqlc.Platform
@@ -188,11 +222,12 @@ func (m *testWebhookPlatformRepo) Delete(ctx context.Context, id uuid.UUID) erro
 
 // newTestWebhookHandler builds a WebhookHandler wired to in-memory mocks with a
 // valid HighLevel provider registered using the given Ed25519 public key.
-func newTestWebhookHandler(t *testing.T, publicKeyPEM string) (*WebhookHandler, *testWebhookEventRepo, *testWebhookSubscriptionRepo) {
+func newTestWebhookHandler(t *testing.T, publicKeyPEM string) (*WebhookHandler, *testWebhookEventRepo, *testWebhookSubscriptionRepo, *testPaymentProviderConfigRepo) {
 	t.Helper()
 
 	eventRepo := newTestWebhookEventRepo()
 	subRepo := newTestWebhookSubscriptionRepo()
+	configRepo := newTestPaymentProviderConfigRepo()
 
 	registry := providers.NewProviderRegistry()
 	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", publicKeyPEM, nil))
@@ -202,11 +237,12 @@ func newTestWebhookHandler(t *testing.T, publicKeyPEM string) (*WebhookHandler, 
 		subRepo,
 		eventRepo,
 		newTestWebhookPlatformRepo(),
+		configRepo,
 		registry,
 		zerolog.Nop(),
 	)
 
-	return NewWebhookHandler(svc, zerolog.Nop()), eventRepo, subRepo
+	return NewWebhookHandler(svc, zerolog.Nop()), eventRepo, subRepo, configRepo
 }
 
 // testEd25519KeyPair generates a fresh Ed25519 key pair and returns the
@@ -244,7 +280,7 @@ func TestWebhookHighLevel_MethodNotAllowed(t *testing.T) {
 	t.Parallel()
 
 	publicKeyPEM, _ := testEd25519KeyPair(t)
-	handler, _, _ := newTestWebhookHandler(t, publicKeyPEM)
+	handler, _, _, _ := newTestWebhookHandler(t, publicKeyPEM)
 
 	req := httptest.NewRequest(http.MethodGet, "/webhooks/highlevel", nil)
 	rec := httptest.NewRecorder()
@@ -260,7 +296,7 @@ func TestWebhookHighLevel_MissingSignature(t *testing.T) {
 	t.Parallel()
 
 	publicKeyPEM, _ := testEd25519KeyPair(t)
-	handler, _, _ := newTestWebhookHandler(t, publicKeyPEM)
+	handler, _, _, _ := newTestWebhookHandler(t, publicKeyPEM)
 
 	body := `{"eventId":"evt_123","eventType":"integration.installed","integrationId":"00000000-0000-0000-0000-000000000001"}`
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/highlevel", strings.NewReader(body))
@@ -277,7 +313,7 @@ func TestWebhookHighLevel_InvalidSignature(t *testing.T) {
 	t.Parallel()
 
 	publicKeyPEM, _ := testEd25519KeyPair(t)
-	handler, _, _ := newTestWebhookHandler(t, publicKeyPEM)
+	handler, _, _, _ := newTestWebhookHandler(t, publicKeyPEM)
 
 	body := `{"eventId":"evt_123","eventType":"integration.installed","integrationId":"00000000-0000-0000-0000-000000000001"}`
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/highlevel", strings.NewReader(body))
@@ -295,7 +331,7 @@ func TestWebhookHighLevel_ValidSignedRequest(t *testing.T) {
 	t.Parallel()
 
 	publicKeyPEM, priv := testEd25519KeyPair(t)
-	handler, _, subRepo := newTestWebhookHandler(t, publicKeyPEM)
+	handler, _, subRepo, configRepo := newTestWebhookHandler(t, publicKeyPEM)
 
 	integrationID := uuid.New()
 	subRepo.subscriptions[integrationID.String()] = sqlc.WebhookSubscription{
@@ -304,8 +340,12 @@ func TestWebhookHighLevel_ValidSignedRequest(t *testing.T) {
 		Endpoint:      "/webhooks/highlevel",
 		Status:        sqlc.WebhookSubscriptionStatusACTIVE,
 	}
+	configRepo.configs["kSRxQkM72aCeYz19uw79"] = sqlc.PaymentProviderConfig{
+		IntegrationID: integrationID,
+		LocationID:    "kSRxQkM72aCeYz19uw79",
+	}
 
-	body := `{"eventId":"evt_123","eventType":"integration.installed","integrationId":"` + integrationID.String() + `"}`
+	body := `{"type":"INSTALL","appId":"6a5f8aafdb5067f4319b1bb4","versionId":"6a5f8aafdb5067f4319b1bb4","installType":"Location","locationId":"kSRxQkM72aCeYz19uw79","companyId":"f3rBPevH93JANjvqtrK0","userId":"K6MePugfKQPdgEicKzVJ","companyName":"evaristustambua@gmail.com","isWhitelabelCompany":false,"whitelabelDetails":{"logoUrl":"","domain":""},"trial":{},"timestamp":"2026-08-17T09:06:59.366Z","webhookId":"f4ef22e3-c4c1-4ce5-996d-297890460e7d"}`
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/highlevel", strings.NewReader(body))
 	req.Header.Set("X-GHL-Signature", signBody(t, priv, []byte(body)))
 	rec := httptest.NewRecorder()
@@ -321,7 +361,7 @@ func TestWebhookHighLevel_DuplicateEvent(t *testing.T) {
 	t.Parallel()
 
 	publicKeyPEM, priv := testEd25519KeyPair(t)
-	handler, eventRepo, subRepo := newTestWebhookHandler(t, publicKeyPEM)
+	handler, eventRepo, subRepo, configRepo := newTestWebhookHandler(t, publicKeyPEM)
 
 	integrationID := uuid.New()
 	subRepo.subscriptions[integrationID.String()] = sqlc.WebhookSubscription{
@@ -330,8 +370,12 @@ func TestWebhookHighLevel_DuplicateEvent(t *testing.T) {
 		Endpoint:      "/webhooks/highlevel",
 		Status:        sqlc.WebhookSubscriptionStatusACTIVE,
 	}
+	configRepo.configs["kSRxQkM72aCeYz19uw79"] = sqlc.PaymentProviderConfig{
+		IntegrationID: integrationID,
+		LocationID:    "kSRxQkM72aCeYz19uw79",
+	}
 
-	body := `{"eventId":"evt_dup","eventType":"integration.installed","integrationId":"` + integrationID.String() + `"}`
+	body := `{"type":"INSTALL","appId":"6a5f8aafdb5067f4319b1bb4","versionId":"6a5f8aafdb5067f4319b1bb4","installType":"Location","locationId":"kSRxQkM72aCeYz19uw79","companyId":"f3rBPevH93JANjvqtrK0","userId":"K6MePugfKQPdgEicKzVJ","companyName":"evaristustambua@gmail.com","isWhitelabelCompany":false,"whitelabelDetails":{"logoUrl":"","domain":""},"trial":{},"timestamp":"2026-08-17T09:06:59.366Z","webhookId":"f4ef22e3-c4c1-4ce5-996d-297890460e7d"}`
 	sig := signBody(t, priv, []byte(body))
 
 	// First delivery succeeds.
@@ -362,7 +406,7 @@ func TestWebhookHighLevel_MalformedJSON(t *testing.T) {
 	t.Parallel()
 
 	publicKeyPEM, priv := testEd25519KeyPair(t)
-	handler, _, _ := newTestWebhookHandler(t, publicKeyPEM)
+	handler, _, _, _ := newTestWebhookHandler(t, publicKeyPEM)
 
 	body := `{invalid json`
 	req := httptest.NewRequest(http.MethodPost, "/webhooks/highlevel", strings.NewReader(body))

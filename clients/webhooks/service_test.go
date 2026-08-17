@@ -77,6 +77,46 @@ func (m *mockWebhookIntegrationRepo) Delete(ctx context.Context, id uuid.UUID) e
 	return nil
 }
 
+// mockPaymentProviderConfigRepo is a minimal PaymentProviderConfigRepo test double
+type mockPaymentProviderConfigRepo struct {
+	configs map[string]sqlc.PaymentProviderConfig
+}
+
+func newMockPaymentProviderConfigRepo() *mockPaymentProviderConfigRepo {
+	return &mockPaymentProviderConfigRepo{
+		configs: make(map[string]sqlc.PaymentProviderConfig),
+	}
+}
+
+func (m *mockPaymentProviderConfigRepo) Create(ctx context.Context, integrationID uuid.UUID, providerName, providerDescription, providerImageURL, locationID, queryURL, paymentsURL string, supportsSubscriptionSchedule bool, providerAPIKey string) (sqlc.PaymentProviderConfig, error) {
+	return sqlc.PaymentProviderConfig{}, nil
+}
+
+func (m *mockPaymentProviderConfigRepo) GetByIntegrationID(ctx context.Context, integrationID uuid.UUID) (sqlc.PaymentProviderConfig, error) {
+	return sqlc.PaymentProviderConfig{}, repo.ErrNotFound
+}
+
+func (m *mockPaymentProviderConfigRepo) GetByLocationID(ctx context.Context, locationID string) (sqlc.PaymentProviderConfig, error) {
+	for _, c := range m.configs {
+		if c.LocationID == locationID {
+			return c, nil
+		}
+	}
+	return sqlc.PaymentProviderConfig{}, repo.ErrNotFound
+}
+
+func (m *mockPaymentProviderConfigRepo) GetByAPIKey(ctx context.Context, apiKey string) (sqlc.PaymentProviderConfig, error) {
+	return sqlc.PaymentProviderConfig{}, repo.ErrNotFound
+}
+
+func (m *mockPaymentProviderConfigRepo) Update(ctx context.Context, integrationID uuid.UUID, providerName, providerDescription, providerImageURL, locationID, queryURL, paymentsURL string, supportsSubscriptionSchedule bool, providerAPIKey string) (sqlc.PaymentProviderConfig, error) {
+	return sqlc.PaymentProviderConfig{}, nil
+}
+
+func (m *mockPaymentProviderConfigRepo) Delete(ctx context.Context, integrationID uuid.UUID) error {
+	return nil
+}
+
 // mockWebhookPlatformRepo is a minimal PlatformRepo test double
 type mockWebhookPlatformRepo struct {
 	platforms map[string]sqlc.Platform
@@ -262,6 +302,7 @@ func TestProcessWebhookUnknownProvider(t *testing.T) {
 		newMockWebhookRepo(),
 		newMockWebhookEventRepo(),
 		newMockWebhookPlatformRepo(),
+		newMockPaymentProviderConfigRepo(),
 		registry,
 		zerolog.Nop(),
 	)
@@ -283,6 +324,7 @@ func TestProcessWebhookInvalidSignature(t *testing.T) {
 		newMockWebhookRepo(),
 		newMockWebhookEventRepo(),
 		newMockWebhookPlatformRepo(),
+		newMockPaymentProviderConfigRepo(),
 		registry,
 		zerolog.Nop(),
 	)
@@ -305,6 +347,7 @@ func TestRegisterWebhookIntegrationNotFound(t *testing.T) {
 		newMockWebhookRepo(),
 		newMockWebhookEventRepo(),
 		newMockWebhookPlatformRepo(),
+		newMockPaymentProviderConfigRepo(),
 		registry,
 		zerolog.Nop(),
 	)
@@ -326,6 +369,7 @@ func TestUnregisterWebhookNotFound(t *testing.T) {
 		newMockWebhookRepo(),
 		newMockWebhookEventRepo(),
 		newMockWebhookPlatformRepo(),
+		newMockPaymentProviderConfigRepo(),
 		registry,
 		zerolog.Nop(),
 	)
