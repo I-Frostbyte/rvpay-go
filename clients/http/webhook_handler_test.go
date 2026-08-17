@@ -239,6 +239,7 @@ func newTestWebhookHandler(t *testing.T, publicKeyPEM string) (*WebhookHandler, 
 		newTestWebhookPlatformRepo(),
 		configRepo,
 		registry,
+		nil, // no dispatcher in this test
 		zerolog.Nop(),
 	)
 

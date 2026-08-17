@@ -1,13 +1,13 @@
 # RVPay Go — Stage Checkpoint
 
-## Stage: Agent 000 — GHL INSTALL Webhook Parsing — COMPLETE
-- [x] ParseEvent maps GHL schema; ProcessWebhook resolves via payment_provider_configs.location_id
-- [x] INSTALL/UNINSTALL dispatch; go test ./clients/... PASS; go vet PASS
+## Stage: Agent 001 — First-Install OAuth + Client Resolution — COMPLETE
+- [x] Stateless callback resolves via integration.external_account_id, falls back to payment_provider_configs.location_id
+- [x] ProcessCallback reuses CREATED integration (activates) instead of ErrIntegrationAlreadyExists; ACTIVE still conflicts
+- [x] INSTALL webhook dispatcher creates/finds payment_provider_configs idempotently; wired in main.go
+- [x] Multiple-client safety: locationId → specific integration → client; missing mapping fails safely
+- [x] Tests: oauth/webhooks/providers/http/cmd PASS; go vet PASS; gofmt clean
 
-## Stage: HighLevel OAuth Callback — state optional — COMPLETE
-- [x] HandleCallback: code required, state optional; state present → existing flow preserved
-- [x] state absent → exchange code → locationId → payment_provider_configs → integration → clientID/platformID → ProcessCallback
-- [x] No new query params, no fake client/platform, no migrations, no External Auth
-- [x] Tests: code+state, code no state, locationId resolution; go test ./clients/... PASS; go vet PASS
+## BLOCKER: First-install mapping
+- [x] Pre-provisioned integration has external_account_id="" (InstallIntegration). No safe GHL locationId → RVPay client mapping on brand-new install without OAuth completing first. Reported per agent 001.
 
 ## Next: Real HighLevel connectivity testing per clients/docs/connectivity-checklist.md

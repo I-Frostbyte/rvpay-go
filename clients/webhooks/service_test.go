@@ -304,6 +304,7 @@ func TestProcessWebhookUnknownProvider(t *testing.T) {
 		newMockWebhookPlatformRepo(),
 		newMockPaymentProviderConfigRepo(),
 		registry,
+		nil, // no dispatcher in this test
 		zerolog.Nop(),
 	)
 
@@ -326,6 +327,7 @@ func TestProcessWebhookInvalidSignature(t *testing.T) {
 		newMockWebhookPlatformRepo(),
 		newMockPaymentProviderConfigRepo(),
 		registry,
+		nil, // no dispatcher in this test
 		zerolog.Nop(),
 	)
 
@@ -349,6 +351,7 @@ func TestRegisterWebhookIntegrationNotFound(t *testing.T) {
 		newMockWebhookPlatformRepo(),
 		newMockPaymentProviderConfigRepo(),
 		registry,
+		nil, // no dispatcher in this test
 		zerolog.Nop(),
 	)
 
@@ -371,6 +374,7 @@ func TestUnregisterWebhookNotFound(t *testing.T) {
 		newMockWebhookPlatformRepo(),
 		newMockPaymentProviderConfigRepo(),
 		registry,
+		nil, // no dispatcher in this test
 		zerolog.Nop(),
 	)
 

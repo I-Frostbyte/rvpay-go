@@ -128,7 +128,23 @@ func run(ctx context.Context, logger zerolog.Logger) error {
 		},
 		logger,
 	)
-	webhookService := webhooks.NewService(integrationRepo, webhookSubscriptionRepo, webhookEventRepo, platformRepo, paymentProviderConfigRepo, providerRegistry, logger)
+	// The HighLevel webhook dispatcher resolves GHL INSTALL/UNINSTALL events to
+	// the specific RVPay integration via the deterministic locationId mapping
+	// and creates/finds the payment_provider_configs record idempotently. It is
+	// wired into the webhook service so normalized events are dispatched.
+	webhookDispatcher := providers.NewHighLevelWebhookDispatcher(
+		providers.NewHighLevelWebhookLogger(logger),
+		integrationRepo,
+		paymentProviderConfigRepo,
+		providers.ProviderConfigSettings{
+			Name:        cfg.HighLevel.ProviderName,
+			Description: cfg.HighLevel.ProviderDescription,
+			ImageURL:    cfg.HighLevel.ProviderImageURL,
+			PaymentsURL: cfg.HighLevel.PaymentURL,
+			QueryURL:    cfg.HighLevel.QueryURL,
+		},
+	)
+	webhookService := webhooks.NewService(integrationRepo, webhookSubscriptionRepo, webhookEventRepo, platformRepo, paymentProviderConfigRepo, providerRegistry, webhookDispatcher, logger)
 	oauthHandler := clientshttp.NewOAuthHandler(oauthService, logger)
 	webhookHandler := clientshttp.NewWebhookHandler(webhookService, logger)
 

@@ -21,10 +21,14 @@ type Service struct {
 	platformsRepo             repo.PlatformRepo
 	paymentProviderConfigRepo repo.PaymentProviderConfigRepo
 	registry                  providers.ProviderRegistry
+	dispatcher                providers.WebhookDispatcher
 	logger                    zerolog.Logger
 }
 
-// NewService creates a new webhook service.
+// NewService creates a new webhook service. dispatcher is the provider
+// webhook event dispatcher used to process normalized events (e.g. the
+// HighLevel INSTALL/UNINSTALL lifecycle). It may be nil; when nil, events are
+// persisted but not dispatched.
 func NewService(
 	integrationsRepo repo.IntegrationRepo,
 	webhookRepo repo.WebhookSubscriptionRepo,
@@ -32,6 +36,7 @@ func NewService(
 	platformsRepo repo.PlatformRepo,
 	paymentProviderConfigRepo repo.PaymentProviderConfigRepo,
 	registry providers.ProviderRegistry,
+	dispatcher providers.WebhookDispatcher,
 	logger zerolog.Logger,
 ) *Service {
 	return &Service{
@@ -41,6 +46,7 @@ func NewService(
 		platformsRepo:             platformsRepo,
 		paymentProviderConfigRepo: paymentProviderConfigRepo,
 		registry:                  registry,
+		dispatcher:                dispatcher,
 		logger:                    logger,
 	}
 }
@@ -222,9 +228,8 @@ func (s *Service) ProcessWebhook(ctx context.Context, providerID string, headers
 		return translateError(err)
 	}
 
-	dispatcher, ok := webhookProvider.(providers.WebhookDispatcher)
-	if ok {
-		err = dispatcher.Dispatch(ctx, event)
+	if s.dispatcher != nil {
+		err = s.dispatcher.Dispatch(ctx, event)
 		if err != nil {
 			s.logger.Error().Err(err).Str("event_id", event.ProviderEventID).Msg("Webhook event dispatch failed")
 			return err

@@ -1072,6 +1072,106 @@ func setupRegistrationContext(t *testing.T, clientRepo *mockClientRepo, platform
 	return clientID, platformID, state
 }
 
+func TestProcessCallback_ReusesCreatedIntegration(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: both association and config creation succeed.
+	svc, integrationRepo, tokenRepo, clientRepo, platformRepo, stateRepo, configRepo := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/payments/custom-provider/provider":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"success":true}`))
+		case "/payments/custom-provider/connect":
+			if r.Method == http.MethodPost {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"success":true}`))
+			} else {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+
+	clientID, platformID, state := setupRegistrationContext(t, clientRepo, platformRepo, stateRepo)
+
+	// Pre-provision a CREATED integration (simulating InstallIntegration).
+	preProvisioned, err := integrationRepo.Create(context.Background(), clientID, platformID, "", sqlc.IntegrationStatusCREATED)
+	if err != nil {
+		t.Fatalf("create pre-provisioned integration: %v", err)
+	}
+
+	result, err := svc.HandleCallback(context.Background(), "test-code", state)
+	if err != nil {
+		t.Fatalf("HandleCallback failed: %v", err)
+	}
+
+	if !result.ProviderRegistered {
+		t.Fatal("ProviderRegistered should be true")
+	}
+	if result.ProviderRegistrationError != nil {
+		t.Fatalf("ProviderRegistrationError should be nil, got %v", result.ProviderRegistrationError)
+	}
+
+	// The pre-provisioned integration must be reused (not a new one created).
+	if len(integrationRepo.integrations) != 1 {
+		t.Fatalf("expected 1 integration (reused), got %d", len(integrationRepo.integrations))
+	}
+	reused, ok := integrationRepo.integrations[preProvisioned.ID.String()]
+	if !ok {
+		t.Fatal("pre-provisioned integration was not reused")
+	}
+	if reused.Status != sqlc.IntegrationStatusACTIVE {
+		t.Fatalf("reused integration status = %s, want ACTIVE", reused.Status)
+	}
+	if reused.ClientID != clientID {
+		t.Fatalf("reused integration ClientID = %v, want %v", reused.ClientID, clientID)
+	}
+	if reused.PlatformID != platformID {
+		t.Fatalf("reused integration PlatformID = %v, want %v", reused.PlatformID, platformID)
+	}
+
+	// Token and config must be persisted for the reused integration.
+	if len(tokenRepo.tokens) != 1 {
+		t.Fatalf("expected 1 token, got %d", len(tokenRepo.tokens))
+	}
+	if len(configRepo.configs) != 1 {
+		t.Fatalf("expected 1 provider config, got %d", len(configRepo.configs))
+	}
+	for _, config := range configRepo.configs {
+		if config.IntegrationID != preProvisioned.ID {
+			t.Fatalf("config IntegrationID = %v, want %v", config.IntegrationID, preProvisioned.ID)
+		}
+		if config.LocationID != "loc-123" {
+			t.Fatalf("config LocationID = %q, want loc-123", config.LocationID)
+		}
+	}
+}
+
+func TestProcessCallback_ActiveIntegrationStillConflicts(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: both association and config creation succeed.
+	svc, integrationRepo, _, clientRepo, platformRepo, stateRepo, _ := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"success":true}`))
+	})
+
+	clientID, platformID, state := setupRegistrationContext(t, clientRepo, platformRepo, stateRepo)
+
+	// Pre-provision an ACTIVE integration (not CREATED). This is a genuine
+	// conflict and must return ErrIntegrationAlreadyExists.
+	_, err := integrationRepo.Create(context.Background(), clientID, platformID, "loc-123", sqlc.IntegrationStatusACTIVE)
+	if err != nil {
+		t.Fatalf("create active integration: %v", err)
+	}
+
+	_, err = svc.HandleCallback(context.Background(), "test-code", state)
+	if status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.AlreadyExists)
+	}
+}
+
 func TestProcessCallback_ProviderRegistrationSuccess(t *testing.T) {
 	t.Parallel()
 
