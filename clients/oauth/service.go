@@ -169,38 +169,87 @@ func (s *Service) BeginAuthorization(ctx context.Context, clientID, platformID u
 	return authURL, state, nil
 }
 
-// HandleCallback processes an OAuth callback from a provider. It validates the
-// state (must exist, be unexpired, and be unconsumed), atomically consumes it
-// to prevent replay, recovers the client/platform context, and then completes
-// the token exchange and integration creation.
+// HandleCallback processes an OAuth callback from a provider.
+//
+// The `code` is always required. The `state` is optional:
+//
+//   - When `state` is present, the existing state-based flow is preserved: the
+//     state is validated (must exist, be unexpired, and be unconsumed),
+//     atomically consumed to prevent replay, and used to recover the
+//     client/platform context.
+//   - When `state` is absent (HighLevel Marketplace OAuth does not return a
+//     state), the authorization code is exchanged first to obtain the GHL
+//     locationId. The locationId is then resolved to the integration via
+//     payment_provider_configs.location_id, and the integration's
+//     client_id/platform_id are used to continue the existing
+//     ProcessCallback/integration flow.
 func (s *Service) HandleCallback(ctx context.Context, code, state string) (*CallbackResult, error) {
 	if code == "" {
 		return nil, ErrMissingCode
 	}
-	if state == "" {
-		return nil, ErrMissingState
+
+	if state != "" {
+		// Atomically consume the state. ConsumeOAuthState only succeeds when the
+		// state exists, is not already consumed, and has not expired. This both
+		// validates the state and prevents replay attacks in a single operation.
+		record, err := s.oauthStateRepo.Consume(ctx, state)
+		if err == repo.ErrNotFound {
+			// Distinguish expired/consumed from unknown for clearer errors.
+			existing, getErr := s.oauthStateRepo.GetByState(ctx, state)
+			if getErr == nil {
+				if existing.ConsumedAt.Valid {
+					return nil, ErrStateConsumed
+				}
+				return nil, ErrStateExpired
+			}
+			return nil, ErrInvalidState
+		}
+		if err != nil {
+			return nil, translateError(err)
+		}
+
+		return s.ProcessCallback(ctx, record.ClientID, record.PlatformID, code, state)
 	}
 
-	// Atomically consume the state. ConsumeOAuthState only succeeds when the
-	// state exists, is not already consumed, and has not expired. This both
-	// validates the state and prevents replay attacks in a single operation.
-	record, err := s.oauthStateRepo.Consume(ctx, state)
+	// No state: resolve the client/platform context from the GHL locationId.
+	// Exchange the authorization code first to obtain the locationId, then
+	// resolve locationId -> payment_provider_configs.location_id ->
+	// integration_id -> integration.client_id + integration.platform_id.
+	if s.configRepo == nil {
+		return nil, ErrProviderConfigRepoNotConfigured
+	}
+
+	provider, ok := s.registry.Get("highlevel")
+	if !ok {
+		return nil, ErrProviderNotSupported
+	}
+
+	tokenResp, err := provider.OAuthProvider().ExchangeCode(ctx, code, s.redirectURI)
+	if err != nil {
+		s.logger.Error().Err(err).Msg("OAuth token exchange failed during stateless callback")
+		return nil, ErrTokenExchangeFailed
+	}
+	if tokenResp.LocationID == "" {
+		return nil, ErrMissingLocationID
+	}
+
+	config, err := s.configRepo.GetByLocationID(ctx, tokenResp.LocationID)
 	if err == repo.ErrNotFound {
-		// Distinguish expired/consumed from unknown for clearer errors.
-		existing, getErr := s.oauthStateRepo.GetByState(ctx, state)
-		if getErr == nil {
-			if existing.ConsumedAt.Valid {
-				return nil, ErrStateConsumed
-			}
-			return nil, ErrStateExpired
-		}
-		return nil, ErrInvalidState
+		return nil, ErrIntegrationNotFound
 	}
 	if err != nil {
 		return nil, translateError(err)
 	}
 
-	return s.ProcessCallback(ctx, record.ClientID, record.PlatformID, code, state)
+	integration, err := s.integrationsRepo.GetByID(ctx, config.IntegrationID)
+	if err == repo.ErrNotFound {
+		return nil, ErrIntegrationNotFound
+	}
+	if err != nil {
+		return nil, translateError(err)
+	}
+
+	return s.ProcessCallback(ctx, integration.ClientID, integration.PlatformID, code, state)
 }
 
 // CallbackResult represents the result of an OAuth callback.

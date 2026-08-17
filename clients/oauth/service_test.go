@@ -749,9 +749,14 @@ func TestHandleCallbackMissingCode(t *testing.T) {
 	}
 }
 
-func TestHandleCallbackMissingState(t *testing.T) {
+func TestHandleCallbackNoState_ProviderNotSupported(t *testing.T) {
 	t.Parallel()
 
+	// State is optional. When state is absent, the service attempts to resolve
+	// the client/platform context from the GHL locationId. With an empty
+	// registry, no HighLevel provider is available, so the flow fails with
+	// ErrProviderNotSupported (FailedPrecondition) rather than treating the
+	// missing state as an invalid argument.
 	svc := NewService(
 		newMockIntegrationRepo(),
 		newMockOAuthTokenRepo(),
@@ -766,8 +771,90 @@ func TestHandleCallbackMissingState(t *testing.T) {
 	)
 
 	_, err := svc.HandleCallback(context.Background(), "code", "")
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("status code = %s, want %s", status.Code(err), codes.InvalidArgument)
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.FailedPrecondition)
+	}
+}
+
+func TestHandleCallbackNoState_ConfigRepoNotConfigured(t *testing.T) {
+	t.Parallel()
+
+	// When state is absent and the payment provider config repo is nil, the
+	// stateless resolution cannot proceed and returns a clear error.
+	registry := providers.NewProviderRegistry()
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "", nil))
+
+	svc := NewService(
+		newMockIntegrationRepo(),
+		newMockOAuthTokenRepo(),
+		newMockClientRepo(),
+		newMockPlatformRepo(),
+		newMockOAuthStateRepo(),
+		nil, // nil config repo
+		registry,
+		"https://example.com/callback",
+		ProviderConfigSettings{},
+		zerolog.Nop(),
+	)
+
+	_, err := svc.HandleCallback(context.Background(), "code", "")
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.FailedPrecondition)
+	}
+}
+
+func TestHandleCallbackNoState_LocationIDResolution(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: token exchange returns a locationId, and payment
+	// provider endpoints succeed.
+	svc, integrationRepo, _, clientRepo, platformRepo, _, configRepo := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"success":true}`))
+	})
+
+	clientID := uuid.New()
+	platformID := uuid.New()
+	clientRepo.clients[clientID.String()] = sqlc.Client{ID: clientID, Status: sqlc.ClientStatusACTIVE}
+	platformRepo.platforms[platformID.String()] = sqlc.Platform{ID: platformID, Name: "HighLevel", Slug: "highlevel", Enabled: true}
+
+	// Create an integration so the config can reference it.
+	integration, err := integrationRepo.Create(context.Background(), clientID, platformID, "loc-123", sqlc.IntegrationStatusACTIVE)
+	if err != nil {
+		t.Fatalf("create integration: %v", err)
+	}
+
+	// Create a payment provider config keyed by the GHL locationId.
+	_, err = configRepo.Create(context.Background(), integration.ID, "RVPay", "RVPay payment provider", "https://example.com/logo.jpg", "loc-123", "https://api.example.com/payments/custom-provider/query", "https://checkout.example.com/payment/checkout", false, "test-api-key")
+	if err != nil {
+		t.Fatalf("create config: %v", err)
+	}
+
+	// Call HandleCallback with code and no state. The service exchanges the
+	// code, obtains the locationId, resolves it to the integration, and
+	// continues the ProcessCallback flow. Because the integration already
+	// exists, ProcessCallback returns ErrIntegrationAlreadyExists, which
+	// proves the locationId-based resolution reached ProcessCallback with the
+	// resolved clientID/platformID.
+	_, err = svc.HandleCallback(context.Background(), "test-code", "")
+	if status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("status code = %s, want %s (integration already exists proves resolution reached ProcessCallback)", status.Code(err), codes.AlreadyExists)
+	}
+}
+
+func TestHandleCallbackNoState_LocationIDNotFound(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: token exchange returns a locationId that has no matching
+	// payment provider config.
+	svc, _, _, _, _, _, _ := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"success":true}`))
+	})
+
+	_, err := svc.HandleCallback(context.Background(), "test-code", "")
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.NotFound)
 	}
 }
 

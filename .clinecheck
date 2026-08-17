@@ -1,15 +1,13 @@
 # RVPay Go — Stage Checkpoint
 
-## Stage: Agent 000 — Fix GHL INSTALL Webhook Parsing — COMPLETE
+## Stage: Agent 000 — GHL INSTALL Webhook Parsing — COMPLETE
+- [x] ParseEvent maps GHL schema; ProcessWebhook resolves via payment_provider_configs.location_id
+- [x] INSTALL/UNINSTALL dispatch; go test ./clients/... PASS; go vet PASS
 
-- [x] Formatted agents/000-quick-fix.md (lines 78-205, content preserved)
-- [x] ParseEvent maps GHL schema: type→EventType, webhookId→ProviderEventID, appId→IntegrationID, companyId→ClientID, locationId→LocationID
-- [x] WebhookEvent.LocationID added
-- [x] ProcessWebhook resolves integration via payment_provider_configs.location_id (no uuid.Parse on appId)
-- [x] INSTALL/UNINSTALL dispatch cases added
-- [x] Tests updated with exact GHL INSTALL payload
-- [x] go test ./clients/... — PASS
-- [x] go vet ./clients/... — PASS
-- [x] No migration created; no OAuth/Transactions changes
+## Stage: HighLevel OAuth Callback — state optional — COMPLETE
+- [x] HandleCallback: code required, state optional; state present → existing flow preserved
+- [x] state absent → exchange code → locationId → payment_provider_configs → integration → clientID/platformID → ProcessCallback
+- [x] No new query params, no fake client/platform, no migrations, no External Auth
+- [x] Tests: code+state, code no state, locationId resolution; go test ./clients/... PASS; go vet PASS
 
 ## Next: Real HighLevel connectivity testing per clients/docs/connectivity-checklist.md
