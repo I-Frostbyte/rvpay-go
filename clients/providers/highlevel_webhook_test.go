@@ -193,7 +193,8 @@ func TestParseEvent(t *testing.T) {
 	t.Parallel()
 
 	provider := NewHighLevelWebhookProvider("")
-	body := []byte(`{"eventId":"evt_123","eventType":"integration.installed","integrationId":"00000000-0000-0000-0000-000000000001","clientId":"cli_1","data":{"key":"value"},"timestamp":1700000000}`)
+	// Exact GHL INSTALL payload.
+	body := []byte(`{"type":"INSTALL","appId":"6a5f8aafdb5067f4319b1bb4","versionId":"6a5f8aafdb5067f4319b1bb4","installType":"Location","locationId":"kSRxQkM72aCeYz19uw79","companyId":"f3rBPevH93JANjvqtrK0","userId":"K6MePugfKQPdgEicKzVJ","companyName":"evaristustambua@gmail.com","isWhitelabelCompany":false,"whitelabelDetails":{"logoUrl":"","domain":""},"trial":{},"timestamp":"2026-08-17T09:06:59.366Z","webhookId":"f4ef22e3-c4c1-4ce5-996d-297890460e7d"}`)
 
 	event, err := provider.ParseEvent(context.Background(), body)
 	if err != nil {
@@ -203,20 +204,24 @@ func TestParseEvent(t *testing.T) {
 	if event.Provider != "highlevel" {
 		t.Fatalf("Provider = %s, want highlevel", event.Provider)
 	}
-	if event.ProviderEventID != "evt_123" {
-		t.Fatalf("ProviderEventID = %s, want evt_123", event.ProviderEventID)
+	if event.EventType != "INSTALL" {
+		t.Fatalf("EventType = %s, want INSTALL", event.EventType)
 	}
-	if event.EventType != "integration.installed" {
-		t.Fatalf("EventType = %s, want integration.installed", event.EventType)
+	if event.ProviderEventID != "f4ef22e3-c4c1-4ce5-996d-297890460e7d" {
+		t.Fatalf("ProviderEventID = %s, want webhookId", event.ProviderEventID)
 	}
-	if event.IntegrationID != "00000000-0000-0000-0000-000000000001" {
-		t.Fatalf("IntegrationID = %s, want test UUID", event.IntegrationID)
+	if event.IntegrationID != "6a5f8aafdb5067f4319b1bb4" {
+		t.Fatalf("IntegrationID = %s, want appId", event.IntegrationID)
 	}
-	if event.ClientID != "cli_1" {
-		t.Fatalf("ClientID = %s, want cli_1", event.ClientID)
+	if event.ClientID != "f3rBPevH93JANjvqtrK0" {
+		t.Fatalf("ClientID = %s, want companyId", event.ClientID)
 	}
-	if event.Payload["key"] != "value" {
-		t.Fatalf("Payload key = %v, want value", event.Payload["key"])
+	if event.LocationID != "kSRxQkM72aCeYz19uw79" {
+		t.Fatalf("LocationID = %s, want locationId", event.LocationID)
+	}
+	// 2026-08-17T09:06:59.366Z in Unix seconds.
+	if event.ReceivedAt != 1786957619 {
+		t.Fatalf("ReceivedAt = %d, want 1786957619", event.ReceivedAt)
 	}
 }
 

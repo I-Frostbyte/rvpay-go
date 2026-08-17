@@ -12,6 +12,7 @@ type WebhookEvent struct {
 	IntegrationID   string
 	ClientID        string
 	PlatformID      string
+	LocationID      string
 	Payload         map[string]interface{}
 	ReceivedAt      int64
 }
