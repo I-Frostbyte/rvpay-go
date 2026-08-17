@@ -81,13 +81,13 @@ func (p *HighLevelWebhookProvider) VerifyRequest(ctx context.Context, headers ma
 //   - locationId → LocationID
 func (p *HighLevelWebhookProvider) ParseEvent(ctx context.Context, body []byte) (*WebhookEvent, error) {
 	var payload struct {
-		Type         string                 `json:"type"`
-		AppID        string                 `json:"appId"`
-		LocationID   string                 `json:"locationId"`
-		CompanyID    string                 `json:"companyId"`
-		Data         map[string]interface{} `json:"data"`
-		Timestamp    string                 `json:"timestamp"`
-		WebhookID    string                 `json:"webhookId"`
+		Type       string                 `json:"type"`
+		AppID      string                 `json:"appId"`
+		LocationID string                 `json:"locationId"`
+		CompanyID  string                 `json:"companyId"`
+		Data       map[string]interface{} `json:"data"`
+		Timestamp  string                 `json:"timestamp"`
+		WebhookID  string                 `json:"webhookId"`
 	}
 
 	if err := json.Unmarshal(body, &payload); err != nil {
