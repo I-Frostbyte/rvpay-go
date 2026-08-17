@@ -68,7 +68,10 @@ services:
       - key: HIGHLEVEL_API_BASE_URL
         sync: false
       - key: TRANSACTIONS_GRPC_ADDR
-        sync: false
+        fromService:
+          type: web
+          name: rvpay-transactions
+          property: hostport
 
   - type: web
     name: rvpay-transactions
