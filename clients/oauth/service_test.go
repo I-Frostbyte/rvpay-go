@@ -1053,25 +1053,66 @@ func newRegistrationTestService(t *testing.T, paymentHandler http.HandlerFunc) (
 		switch r.URL.Path {
 		case "/oauth/token":
 			// Verify the token exchange request conforms to the HighLevel
-			// Marketplace Sub-account/Location OAuth flow. The form body must
-			// include user_type=Location; without it the exchange is invalid
-			// for a Location-targeted Marketplace app.
+			// OAuth v3 contract. The request must use the camelCase property
+			// names (clientId, clientSecret, grantType, redirectUri,
+			// userType) and the Version: v3 header. The obsolete snake_case
+			// properties (client_id, client_secret, grant_type,
+			// redirect_uri, user_type) must NOT be sent.
+			if got := r.Header.Get("Version"); got != "v3" {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"missing Version: v3 header"}`))
+				return
+			}
 			if err := r.ParseForm(); err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				_, _ = w.Write([]byte(`{"error":"unparseable form"}`))
 				return
 			}
-			if got := r.Form.Get("user_type"); got != "Location" {
+			// Required v3 camelCase fields.
+			if got := r.Form.Get("clientId"); got != "test-client" {
 				w.WriteHeader(http.StatusBadRequest)
-				_, _ = w.Write([]byte(`{"error":"missing user_type=Location"}`))
+				_, _ = w.Write([]byte(`{"error":"missing clientId"}`))
 				return
+			}
+			if got := r.Form.Get("clientSecret"); got != "test-secret" {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"missing clientSecret"}`))
+				return
+			}
+			if got := r.Form.Get("grantType"); got != "authorization_code" {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"missing grantType=authorization_code"}`))
+				return
+			}
+			if got := r.Form.Get("code"); got != "test-code" {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"missing code"}`))
+				return
+			}
+			if got := r.Form.Get("redirectUri"); got != "https://example.com/callback" {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"missing redirectUri"}`))
+				return
+			}
+			if got := r.Form.Get("userType"); got != "Location" {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"missing userType=Location"}`))
+				return
+			}
+			// Obsolete snake_case fields must NOT be sent.
+			for _, obsolete := range []string{"client_id", "client_secret", "grant_type", "redirect_uri", "user_type"} {
+				if r.Form.Get(obsolete) != "" {
+					w.WriteHeader(http.StatusBadRequest)
+					_, _ = w.Write([]byte(`{"error":"obsolete field ` + obsolete + ` must not be sent"}`))
+					return
+				}
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{
-				"access_token":"test-access-token",
-				"refresh_token":"test-refresh-token",
-				"expires_in":3600,
-				"token_type":"Bearer",
+				"accessToken":"test-access-token",
+				"refreshToken":"test-refresh-token",
+				"expiresIn":3600,
+				"tokenType":"Bearer",
 				"scope":"read write",
 				"locationId":"loc-123"
 			}`))
