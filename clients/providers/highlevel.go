@@ -141,6 +141,11 @@ func (p *HighLevelProvider) ExchangeCode(ctx context.Context, code string, redir
 	data.Set("redirect_uri", redirectURI)
 	data.Set("client_id", p.clientID)
 	data.Set("client_secret", p.clientSecret)
+	// user_type=Location is required by the HighLevel Marketplace OAuth flow
+	// for Sub-account / Location installations. RVPay is a Marketplace app
+	// targeting Sub-accounts, so the token exchange must declare the Location
+	// user type.
+	data.Set("user_type", "Location")
 
 	req, err := http.NewRequestWithContext(ctx, "POST", p.tokenURL, strings.NewReader(data.Encode()))
 	if err != nil {

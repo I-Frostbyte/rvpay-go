@@ -8,4 +8,10 @@
 - [x] go build ./clients/... PASS; go test ./clients/... PASS; go vet PASS; gofmt clean
 - [x] Fresh Sub-account install covered by stateless-callback tests (token exchange → locationId → integration reuse → registration)
 
+## Stage: Final GHL OAuth Verification — COMPLETE
+- [x] ExchangeCode now sends user_type=Location (Sub-account/Location Marketplace flow)
+- [x] Mock server asserts user_type=Location is actually sent in token exchange
+- [x] locationId parsing verified; endpoints confirmed correct
+- [x] go build/test/vet ./clients/... PASS; gofmt clean
+
 ## Next: Real HighLevel connectivity testing per clients/docs/connectivity-checklist.md
