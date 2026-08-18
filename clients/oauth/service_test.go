@@ -1052,6 +1052,20 @@ func newRegistrationTestService(t *testing.T, paymentHandler http.HandlerFunc) (
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/oauth/token":
+			// Verify the token exchange request conforms to the HighLevel
+			// Marketplace Sub-account/Location OAuth flow. The form body must
+			// include user_type=Location; without it the exchange is invalid
+			// for a Location-targeted Marketplace app.
+			if err := r.ParseForm(); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"unparseable form"}`))
+				return
+			}
+			if got := r.Form.Get("user_type"); got != "Location" {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"missing user_type=Location"}`))
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{
 				"access_token":"test-access-token",

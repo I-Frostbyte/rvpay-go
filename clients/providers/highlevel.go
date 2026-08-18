@@ -42,9 +42,9 @@ func NewHighLevelProvider(clientID, clientSecret, redirectURI, webhookPublicKey 
 		clientSecret:     clientSecret,
 		webhookPublicKey: webhookPublicKey,
 		redirectURI:      redirectURI,
-		authURL:          "https://api.highlevel.com/oauth/authorize",
-		tokenURL:         "https://api.highlevel.com/oauth/token",
-		userInfoURL:      "https://api.highlevel.com/v1/users/me",
+		authURL:          "https://marketplace.gohighlevel.com/oauth/chooselocation",
+		tokenURL:         "https://services.leadconnectorhq.com/oauth/token",
+		userInfoURL:      "https://services.leadconnectorhq.com/oauth/userinfo",
 		scopes:           []string{"read", "write"},
 		// A single shared client is reused across all provider calls so HTTP
 		// connections are pooled and reused rather than recreated per request.
@@ -141,6 +141,11 @@ func (p *HighLevelProvider) ExchangeCode(ctx context.Context, code string, redir
 	data.Set("redirect_uri", redirectURI)
 	data.Set("client_id", p.clientID)
 	data.Set("client_secret", p.clientSecret)
+	// user_type=Location is required by the HighLevel Marketplace OAuth flow
+	// for Sub-account / Location installations. RVPay is a Marketplace app
+	// targeting Sub-accounts, so the token exchange must declare the Location
+	// user type.
+	data.Set("user_type", "Location")
 
 	req, err := http.NewRequestWithContext(ctx, "POST", p.tokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
