@@ -136,22 +136,25 @@ func (p *HighLevelProvider) GenerateAuthorizationURL(ctx context.Context, state 
 
 func (p *HighLevelProvider) ExchangeCode(ctx context.Context, code string, redirectURI string) (*TokenResponse, error) {
 	data := url.Values{}
-	data.Set("grant_type", "authorization_code")
+	// HighLevel OAuth v3 contract uses camelCase property names.
+	data.Set("clientId", p.clientID)
+	data.Set("clientSecret", p.clientSecret)
+	data.Set("grantType", "authorization_code")
 	data.Set("code", code)
-	data.Set("redirect_uri", redirectURI)
-	data.Set("client_id", p.clientID)
-	data.Set("client_secret", p.clientSecret)
-	// user_type=Location is required by the HighLevel Marketplace OAuth flow
+	data.Set("redirectUri", redirectURI)
+	// userType=Location is required by the HighLevel Marketplace OAuth flow
 	// for Sub-account / Location installations. RVPay is a Marketplace app
 	// targeting Sub-accounts, so the token exchange must declare the Location
 	// user type.
-	data.Set("user_type", "Location")
+	data.Set("userType", "Location")
 
 	req, err := http.NewRequestWithContext(ctx, "POST", p.tokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Version", "v3")
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
@@ -168,11 +171,12 @@ func (p *HighLevelProvider) ExchangeCode(ctx context.Context, code string, redir
 		return nil, fmt.Errorf("token exchange failed: %s", sanitizeErrorBody(body))
 	}
 
+	// HighLevel OAuth v3 response uses camelCase fields.
 	var tokenResp struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresIn    int64  `json:"expires_in"`
-		TokenType    string `json:"token_type"`
+		AccessToken  string `json:"accessToken"`
+		RefreshToken string `json:"refreshToken"`
+		ExpiresIn    int64  `json:"expiresIn"`
+		TokenType    string `json:"tokenType"`
 		Scope        string `json:"scope"`
 		LocationID   string `json:"locationId"`
 	}
@@ -193,16 +197,19 @@ func (p *HighLevelProvider) ExchangeCode(ctx context.Context, code string, redir
 
 func (p *HighLevelProvider) RefreshToken(ctx context.Context, refreshToken string) (*TokenResponse, error) {
 	data := url.Values{}
-	data.Set("grant_type", "refresh_token")
-	data.Set("refresh_token", refreshToken)
-	data.Set("client_id", p.clientID)
-	data.Set("client_secret", p.clientSecret)
+	// HighLevel OAuth v3 contract uses camelCase property names.
+	data.Set("clientId", p.clientID)
+	data.Set("clientSecret", p.clientSecret)
+	data.Set("grantType", "refresh_token")
+	data.Set("refreshToken", refreshToken)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", p.tokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create refresh request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Version", "v3")
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
@@ -219,11 +226,12 @@ func (p *HighLevelProvider) RefreshToken(ctx context.Context, refreshToken strin
 		return nil, fmt.Errorf("token refresh failed: %s", sanitizeErrorBody(body))
 	}
 
+	// HighLevel OAuth v3 response uses camelCase fields.
 	var tokenResp struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresIn    int64  `json:"expires_in"`
-		TokenType    string `json:"token_type"`
+		AccessToken  string `json:"accessToken"`
+		RefreshToken string `json:"refreshToken"`
+		ExpiresIn    int64  `json:"expiresIn"`
+		TokenType    string `json:"tokenType"`
 		Scope        string `json:"scope"`
 		LocationID   string `json:"locationId"`
 	}
