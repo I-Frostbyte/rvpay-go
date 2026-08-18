@@ -1378,9 +1378,14 @@ type InstallIntegrationRequest struct {
 	// client_id is the unique identifier of the owning client.
 	ClientId string `protobuf:"bytes,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
 	// platform_id is the unique identifier of the platform to connect.
-	PlatformId    string `protobuf:"bytes,2,opt,name=platform_id,json=platformId,proto3" json:"platform_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	PlatformId string `protobuf:"bytes,2,opt,name=platform_id,json=platformId,proto3" json:"platform_id,omitempty"`
+	// external_account_id is the provider-side account identifier (e.g. the GHL
+	// locationId) that deterministically maps this integration to the correct
+	// client. It is optional and backwards-compatible; when omitted the
+	// integration is created without a provider account binding.
+	ExternalAccountId string `protobuf:"bytes,3,opt,name=external_account_id,json=externalAccountId,proto3" json:"external_account_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *InstallIntegrationRequest) Reset() {
@@ -1423,6 +1428,13 @@ func (x *InstallIntegrationRequest) GetClientId() string {
 func (x *InstallIntegrationRequest) GetPlatformId() string {
 	if x != nil {
 		return x.PlatformId
+	}
+	return ""
+}
+
+func (x *InstallIntegrationRequest) GetExternalAccountId() string {
+	if x != nil {
+		return x.ExternalAccountId
 	}
 	return ""
 }
@@ -2147,11 +2159,12 @@ const file_clients_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"Y\n" +
+	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x89\x01\n" +
 	"\x19InstallIntegrationRequest\x12\x1b\n" +
 	"\tclient_id\x18\x01 \x01(\tR\bclientId\x12\x1f\n" +
 	"\vplatform_id\x18\x02 \x01(\tR\n" +
-	"platformId\"X\n" +
+	"platformId\x12.\n" +
+	"\x13external_account_id\x18\x03 \x01(\tR\x11externalAccountId\"X\n" +
 	"\x1aInstallIntegrationResponse\x12:\n" +
 	"\vintegration\x18\x01 \x01(\v2\x18.clientsgrpc.IntegrationR\vintegration\"-\n" +
 	"\x1bUninstallIntegrationRequest\x12\x0e\n" +

@@ -169,38 +169,100 @@ func (s *Service) BeginAuthorization(ctx context.Context, clientID, platformID u
 	return authURL, state, nil
 }
 
-// HandleCallback processes an OAuth callback from a provider. It validates the
-// state (must exist, be unexpired, and be unconsumed), atomically consumes it
-// to prevent replay, recovers the client/platform context, and then completes
-// the token exchange and integration creation.
+// HandleCallback processes an OAuth callback from a provider.
+//
+// The `code` is always required. The `state` is optional:
+//
+//   - When `state` is present, the existing state-based flow is preserved: the
+//     state is validated (must exist, be unexpired, and be unconsumed),
+//     atomically consumed to prevent replay, and used to recover the
+//     client/platform context.
+//   - When `state` is absent (HighLevel Marketplace OAuth does not return a
+//     state), the authorization code is exchanged first to obtain the GHL
+//     locationId. The locationId is then resolved to the integration via the
+//     deterministic mapping: first by `integration.external_account_id` (the
+//     GHL location identifier established during provisioning/activation), then
+//     by `payment_provider_configs.location_id`. The integration's
+//     client_id/platform_id are used to continue the existing
+//     ProcessCallback/integration flow.
 func (s *Service) HandleCallback(ctx context.Context, code, state string) (*CallbackResult, error) {
 	if code == "" {
 		return nil, ErrMissingCode
 	}
-	if state == "" {
-		return nil, ErrMissingState
+
+	if state != "" {
+		// Atomically consume the state. ConsumeOAuthState only succeeds when the
+		// state exists, is not already consumed, and has not expired. This both
+		// validates the state and prevents replay attacks in a single operation.
+		record, err := s.oauthStateRepo.Consume(ctx, state)
+		if err == repo.ErrNotFound {
+			// Distinguish expired/consumed from unknown for clearer errors.
+			existing, getErr := s.oauthStateRepo.GetByState(ctx, state)
+			if getErr == nil {
+				if existing.ConsumedAt.Valid {
+					return nil, ErrStateConsumed
+				}
+				return nil, ErrStateExpired
+			}
+			return nil, ErrInvalidState
+		}
+		if err != nil {
+			return nil, translateError(err)
+		}
+
+		return s.ProcessCallback(ctx, record.ClientID, record.PlatformID, code, state)
 	}
 
-	// Atomically consume the state. ConsumeOAuthState only succeeds when the
-	// state exists, is not already consumed, and has not expired. This both
-	// validates the state and prevents replay attacks in a single operation.
-	record, err := s.oauthStateRepo.Consume(ctx, state)
-	if err == repo.ErrNotFound {
-		// Distinguish expired/consumed from unknown for clearer errors.
-		existing, getErr := s.oauthStateRepo.GetByState(ctx, state)
-		if getErr == nil {
-			if existing.ConsumedAt.Valid {
-				return nil, ErrStateConsumed
-			}
-			return nil, ErrStateExpired
-		}
-		return nil, ErrInvalidState
+	// No state: resolve the client/platform context from the GHL locationId.
+	// Exchange the authorization code first to obtain the locationId, then
+	// resolve locationId -> integration via the deterministic mapping.
+	if s.configRepo == nil {
+		return nil, ErrProviderConfigRepoNotConfigured
 	}
+
+	provider, ok := s.registry.Get("highlevel")
+	if !ok {
+		return nil, ErrProviderNotSupported
+	}
+
+	tokenResp, err := provider.OAuthProvider().ExchangeCode(ctx, code, s.redirectURI)
 	if err != nil {
+		s.logger.Error().Err(err).Msg("OAuth token exchange failed during stateless callback")
+		return nil, ErrTokenExchangeFailed
+	}
+	if tokenResp.LocationID == "" {
+		return nil, ErrMissingLocationID
+	}
+
+	// Resolve the integration deterministically from the GHL locationId.
+	// First try the provisioning mapping: integration.external_account_id =
+	// GHL locationId. This is the authoritative mapping established when the
+	// integration is activated. If that is not set, fall back to the
+	// payment_provider_configs.location_id mapping (created during provider
+	// registration). If neither resolves, fail clearly rather than selecting
+	// an arbitrary integration or client.
+	integration, err := s.integrationsRepo.GetByExternalAccountID(ctx, tokenResp.LocationID)
+	if err == repo.ErrNotFound {
+		// Fall back to the payment provider config mapping.
+		config, configErr := s.configRepo.GetByLocationID(ctx, tokenResp.LocationID)
+		if configErr == repo.ErrNotFound {
+			return nil, ErrIntegrationNotFound
+		}
+		if configErr != nil {
+			return nil, translateError(configErr)
+		}
+		integration, err = s.integrationsRepo.GetByID(ctx, config.IntegrationID)
+		if err == repo.ErrNotFound {
+			return nil, ErrIntegrationNotFound
+		}
+		if err != nil {
+			return nil, translateError(err)
+		}
+	} else if err != nil {
 		return nil, translateError(err)
 	}
 
-	return s.ProcessCallback(ctx, record.ClientID, record.PlatformID, code, state)
+	return s.ProcessCallback(ctx, integration.ClientID, integration.PlatformID, code, state)
 }
 
 // CallbackResult represents the result of an OAuth callback.
@@ -230,6 +292,12 @@ type CallbackResult struct {
 // After the integration and OAuth token are persisted, it triggers the
 // HighLevel Custom Payment Provider registration lifecycle (provider
 // association and configuration) when the provider supports it.
+//
+// If an integration already exists for the client/platform with status
+// CREATED (a pre-provisioned integration awaiting OAuth completion), it is
+// reused and activated rather than returning ErrIntegrationAlreadyExists.
+// This supports the HighLevel Marketplace first-install flow where the
+// integration is pre-created before the OAuth callback arrives.
 func (s *Service) ProcessCallback(ctx context.Context, clientID, platformID uuid.UUID, code, state string) (*CallbackResult, error) {
 	platform, err := s.platformsRepo.GetByID(ctx, platformID)
 	if err == repo.ErrNotFound {
@@ -272,17 +340,33 @@ func (s *Service) ProcessCallback(ctx context.Context, clientID, platformID uuid
 		return nil, ErrUserInfoFailed
 	}
 
-	_, err = s.integrationsRepo.GetByClientAndPlatform(ctx, clientID, platformID)
+	// Determine the integration to use. If an integration already exists for
+	// this client/platform:
+	//   - CREATED: reuse it (pre-provisioned integration awaiting OAuth
+	//     completion). Activate it and continue the token/registration flow.
+	//   - otherwise: return ErrIntegrationAlreadyExists (genuine conflict).
+	var integration sqlc.Integration
+	existing, err := s.integrationsRepo.GetByClientAndPlatform(ctx, clientID, platformID)
 	if err == nil {
-		return nil, ErrIntegrationAlreadyExists
-	}
-	if !errors.Is(err, repo.ErrNotFound) {
+		if existing.Status != sqlc.IntegrationStatusCREATED {
+			return nil, ErrIntegrationAlreadyExists
+		}
+		// Reuse the pre-provisioned CREATED integration. Activate it. The
+		// external_account_id is set to the GHL locationId when the provider
+		// registration persists the payment_provider_configs record; the
+		// locationId is the deterministic GHL sub-account identifier.
+		integration, err = s.integrationsRepo.UpdateStatus(ctx, existing.ID, sqlc.IntegrationStatusACTIVE)
+		if err != nil {
+			return nil, translateError(err)
+		}
+		s.logger.Info().Str("integration_id", integration.ID.String()).Str("client_id", clientID.String()).Str("platform_id", platformID.String()).Msg("reused pre-provisioned CREATED integration")
+	} else if !errors.Is(err, repo.ErrNotFound) {
 		return nil, translateError(err)
-	}
-
-	integration, err := s.integrationsRepo.Create(ctx, clientID, platformID, providerUserID, sqlc.IntegrationStatusACTIVE)
-	if err != nil {
-		return nil, translateError(err)
+	} else {
+		integration, err = s.integrationsRepo.Create(ctx, clientID, platformID, providerUserID, sqlc.IntegrationStatusACTIVE)
+		if err != nil {
+			return nil, translateError(err)
+		}
 	}
 
 	expiresAt := time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)

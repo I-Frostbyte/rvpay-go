@@ -7,9 +7,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
+	"github.com/rs/zerolog"
 )
 
 // HighLevelWebhookProvider implements WebhookProvider for HighLevel.
@@ -190,14 +194,52 @@ func (v *HighLevelWebhookValidator) ValidateSignature(secret string, headers map
 }
 
 // HighLevelWebhookDispatcher implements WebhookDispatcher for HighLevel.
+//
+// It resolves GHL webhook events to the specific RVPay integration and client
+// using the deterministic GHL locationId mapping. The INSTALL event creates or
+// finds the payment_provider_configs record idempotently so that the OAuth
+// callback and INSTALL webhook can arrive in any order.
 type HighLevelWebhookDispatcher struct {
-	logger Logger
+	logger           Logger
+	integrationsRepo repo.IntegrationRepo
+	configRepo       repo.PaymentProviderConfigRepo
+	providerConfig   ProviderConfigSettings
+}
+
+// ProviderConfigSettings holds the configuration used to build the HighLevel
+// Custom Payment Provider configuration. All values come from environment
+// configuration; none are hard-coded.
+type ProviderConfigSettings struct {
+	// Name is the display name of the payment provider.
+	Name string
+	// Description is the description of the payment provider.
+	Description string
+	// ImageURL is the publicly accessible image URL of the payment provider.
+	ImageURL string
+	// PaymentsURL is the frontend checkout URL supplied to HighLevel.
+	PaymentsURL string
+	// QueryURL is the backend query URL supplied to HighLevel.
+	QueryURL string
 }
 
 // NewHighLevelWebhookDispatcher creates a new HighLevel webhook dispatcher.
-func NewHighLevelWebhookDispatcher(logger Logger) *HighLevelWebhookDispatcher {
+//
+// integrationsRepo and configRepo are required to resolve the GHL locationId
+// to the specific RVPay integration and to create/find the
+// payment_provider_configs record idempotently. providerConfig holds the
+// configuration used when creating a new payment provider config from an
+// INSTALL event.
+func NewHighLevelWebhookDispatcher(
+	logger Logger,
+	integrationsRepo repo.IntegrationRepo,
+	configRepo repo.PaymentProviderConfigRepo,
+	providerConfig ProviderConfigSettings,
+) *HighLevelWebhookDispatcher {
 	return &HighLevelWebhookDispatcher{
-		logger: logger,
+		logger:           logger,
+		integrationsRepo: integrationsRepo,
+		configRepo:       configRepo,
+		providerConfig:   providerConfig,
 	}
 }
 
@@ -221,9 +263,88 @@ func (d *HighLevelWebhookDispatcher) Dispatch(ctx context.Context, event *Webhoo
 	}
 }
 
+// handleIntegrationInstalled processes a GHL INSTALL event. It resolves the
+// specific RVPay integration from the GHL locationId and creates or finds the
+// corresponding payment_provider_configs record idempotently.
+//
+// Resolution order:
+//  1. integration.external_account_id = GHL locationId (the deterministic
+//     provisioning mapping established when the integration is activated).
+//  2. payment_provider_configs.location_id = GHL locationId (created during
+//     provider registration).
+//
+// If the integration cannot be resolved, the event fails clearly rather than
+// selecting an arbitrary integration or client. This preserves multiple-client
+// safety: a GHL installation belonging to Client B never resolves to Client A.
 func (d *HighLevelWebhookDispatcher) handleIntegrationInstalled(ctx context.Context, event *WebhookEvent) error {
-	d.logger.Info("Integration installed event received", "integration_id", event.IntegrationID)
-	// Dispatch to integrations service to update integration status
+	if event.LocationID == "" {
+		return fmt.Errorf("INSTALL event missing locationId")
+	}
+	if d.configRepo == nil {
+		return fmt.Errorf("payment provider config repo not configured")
+	}
+	if d.integrationsRepo == nil {
+		return fmt.Errorf("integration repo not configured")
+	}
+
+	// Resolve the integration deterministically from the GHL locationId.
+	integration, err := d.integrationsRepo.GetByExternalAccountID(ctx, event.LocationID)
+	if err == repo.ErrNotFound {
+		// Fall back to the payment provider config mapping.
+		config, configErr := d.configRepo.GetByLocationID(ctx, event.LocationID)
+		if configErr == repo.ErrNotFound {
+			return fmt.Errorf("no integration found for GHL locationId %q", event.LocationID)
+		}
+		if configErr != nil {
+			return fmt.Errorf("resolve payment provider config for locationId: %w", configErr)
+		}
+		integration, err = d.integrationsRepo.GetByID(ctx, config.IntegrationID)
+		if err == repo.ErrNotFound {
+			return fmt.Errorf("integration %s not found for GHL locationId %q", config.IntegrationID, event.LocationID)
+		}
+		if err != nil {
+			return fmt.Errorf("resolve integration for locationId: %w", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("resolve integration by external account id: %w", err)
+	}
+
+	// Create or find the payment_provider_configs record idempotently.
+	// If the config already exists for this integration, reuse it. Otherwise
+	// create it with the GHL locationId. The provider name/description/URLs
+	// are populated from configuration; they may be empty if not configured,
+	// and will be completed during provider registration.
+	_, err = d.configRepo.GetByIntegrationID(ctx, integration.ID)
+	if err == nil {
+		d.logger.Info("INSTALL event: payment provider config already exists; reusing", "integration_id", integration.ID.String(), "location_id", event.LocationID)
+		return nil
+	}
+	if !errors.Is(err, repo.ErrNotFound) {
+		return fmt.Errorf("get payment provider config for integration: %w", err)
+	}
+
+	_, err = d.configRepo.Create(
+		ctx,
+		integration.ID,
+		d.providerConfig.Name,
+		d.providerConfig.Description,
+		d.providerConfig.ImageURL,
+		event.LocationID,
+		d.providerConfig.QueryURL,
+		d.providerConfig.PaymentsURL,
+		false, // RVPay supports one-time payments only.
+		"",    // provider API key is generated during provider registration.
+	)
+	if err == repo.ErrDuplicate {
+		// A concurrent INSTALL event created the config; reuse it.
+		d.logger.Info("INSTALL event: payment provider config created concurrently; reusing", "integration_id", integration.ID.String(), "location_id", event.LocationID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("create payment provider config for integration: %w", err)
+	}
+
+	d.logger.Info("INSTALL event: payment provider config created", "integration_id", integration.ID.String(), "location_id", event.LocationID)
 	return nil
 }
 
@@ -254,4 +375,29 @@ func (d *HighLevelWebhookDispatcher) handleProviderDisconnected(ctx context.Cont
 // Logger defines the logging interface.
 type Logger interface {
 	Info(msg string, args ...interface{})
+}
+
+// highLevelWebhookLogger adapts a zerolog.Logger to the providers.Logger
+// interface used by the HighLevelWebhookDispatcher.
+type highLevelWebhookLogger struct {
+	logger zerolog.Logger
+}
+
+// NewHighLevelWebhookLogger creates a Logger adapter backed by a zerolog
+// logger. It is used to wire the HighLevel webhook dispatcher with the
+// service's structured logger.
+func NewHighLevelWebhookLogger(logger zerolog.Logger) Logger {
+	return &highLevelWebhookLogger{logger: logger}
+}
+
+func (l *highLevelWebhookLogger) Info(msg string, args ...interface{}) {
+	event := l.logger.Info()
+	for i := 0; i+1 < len(args); i += 2 {
+		key, ok := args[i].(string)
+		if !ok {
+			continue
+		}
+		event = event.Interface(key, args[i+1])
+	}
+	event.Msg(msg)
 }

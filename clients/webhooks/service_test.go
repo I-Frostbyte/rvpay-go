@@ -2,6 +2,11 @@ package webhooks
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"testing"
 
 	"github.com/I-Frostbyte/rvpay-go/clients/db/repo"
@@ -13,6 +18,37 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// testWebhookEd25519KeyPair generates a fresh Ed25519 key pair and returns the
+// PEM-encoded public key and the raw private key for signing test payloads.
+func testWebhookEd25519KeyPair(t *testing.T) (publicKeyPEM string, privateKey ed25519.PrivateKey) {
+	t.Helper()
+
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate ed25519 key: %v", err)
+	}
+
+	pubBytes, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		t.Fatalf("marshal public key: %v", err)
+	}
+
+	publicKeyPEM = string(pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pubBytes,
+	}))
+
+	return publicKeyPEM, priv
+}
+
+// signWebhookBody signs the raw body with the private key and returns the
+// base64 encoded signature for the X-GHL-Signature header.
+func signWebhookBody(t *testing.T, priv ed25519.PrivateKey, body []byte) string {
+	t.Helper()
+	sig := ed25519.Sign(priv, body)
+	return base64.StdEncoding.EncodeToString(sig)
+}
 
 // mockWebhookIntegrationRepo is a minimal IntegrationRepo test double
 type mockWebhookIntegrationRepo struct {
@@ -42,6 +78,11 @@ func (m *mockWebhookIntegrationRepo) GetByClientAndPlatform(ctx context.Context,
 }
 
 func (m *mockWebhookIntegrationRepo) GetByExternalAccountID(ctx context.Context, externalAccountID string) (sqlc.Integration, error) {
+	for _, i := range m.integrations {
+		if i.ExternalAccountID == externalAccountID {
+			return i, nil
+		}
+	}
 	return sqlc.Integration{}, repo.ErrNotFound
 }
 
@@ -89,7 +130,26 @@ func newMockPaymentProviderConfigRepo() *mockPaymentProviderConfigRepo {
 }
 
 func (m *mockPaymentProviderConfigRepo) Create(ctx context.Context, integrationID uuid.UUID, providerName, providerDescription, providerImageURL, locationID, queryURL, paymentsURL string, supportsSubscriptionSchedule bool, providerAPIKey string) (sqlc.PaymentProviderConfig, error) {
-	return sqlc.PaymentProviderConfig{}, nil
+	// Idempotent: if a config already exists for this integration, return ErrDuplicate.
+	for _, c := range m.configs {
+		if c.IntegrationID == integrationID {
+			return sqlc.PaymentProviderConfig{}, repo.ErrDuplicate
+		}
+	}
+	config := sqlc.PaymentProviderConfig{
+		ID:                           uuid.New(),
+		IntegrationID:                integrationID,
+		ProviderName:                 providerName,
+		ProviderDescription:          providerDescription,
+		ProviderImageUrl:             providerImageURL,
+		LocationID:                   locationID,
+		QueryUrl:                     queryURL,
+		PaymentsUrl:                  paymentsURL,
+		SupportsSubscriptionSchedule: supportsSubscriptionSchedule,
+		ProviderApiKey:               providerAPIKey,
+	}
+	m.configs[config.ID.String()] = config
+	return config, nil
 }
 
 func (m *mockPaymentProviderConfigRepo) GetByIntegrationID(ctx context.Context, integrationID uuid.UUID) (sqlc.PaymentProviderConfig, error) {
@@ -304,6 +364,7 @@ func TestProcessWebhookUnknownProvider(t *testing.T) {
 		newMockWebhookPlatformRepo(),
 		newMockPaymentProviderConfigRepo(),
 		registry,
+		nil, // no dispatcher in this test
 		zerolog.Nop(),
 	)
 
@@ -326,6 +387,7 @@ func TestProcessWebhookInvalidSignature(t *testing.T) {
 		newMockWebhookPlatformRepo(),
 		newMockPaymentProviderConfigRepo(),
 		registry,
+		nil, // no dispatcher in this test
 		zerolog.Nop(),
 	)
 
@@ -349,6 +411,7 @@ func TestRegisterWebhookIntegrationNotFound(t *testing.T) {
 		newMockWebhookPlatformRepo(),
 		newMockPaymentProviderConfigRepo(),
 		registry,
+		nil, // no dispatcher in this test
 		zerolog.Nop(),
 	)
 
@@ -371,6 +434,7 @@ func TestUnregisterWebhookNotFound(t *testing.T) {
 		newMockWebhookPlatformRepo(),
 		newMockPaymentProviderConfigRepo(),
 		registry,
+		nil, // no dispatcher in this test
 		zerolog.Nop(),
 	)
 
@@ -379,3 +443,382 @@ func TestUnregisterWebhookNotFound(t *testing.T) {
 		t.Fatalf("status code = %s, want %s", status.Code(err), codes.NotFound)
 	}
 }
+
+// mockWebhookDispatcher is a WebhookDispatcher test double that records the
+// dispatched events and can be configured to fail.
+type mockWebhookDispatcher struct {
+	events []*providers.WebhookEvent
+	err    error
+}
+
+func (m *mockWebhookDispatcher) Dispatch(ctx context.Context, event *providers.WebhookEvent) error {
+	m.events = append(m.events, event)
+	return m.err
+}
+
+// newTestWebhookService builds a webhook Service wired to in-memory mocks and
+// a HighLevel provider with a valid Ed25519 key for signature verification.
+// It returns the service, the mocks for assertions, and the private key for
+// signing test payloads.
+func newTestWebhookService(t *testing.T, dispatcher providers.WebhookDispatcher) (*Service, *mockWebhookIntegrationRepo, *mockWebhookRepo, *mockWebhookEventRepo, *mockPaymentProviderConfigRepo, ed25519.PrivateKey) {
+	t.Helper()
+
+	integrationRepo := newMockWebhookIntegrationRepo()
+	webhookRepo := newMockWebhookRepo()
+	eventRepo := newMockWebhookEventRepo()
+	configRepo := newMockPaymentProviderConfigRepo()
+
+	publicKeyPEM, priv := testWebhookEd25519KeyPair(t)
+
+	registry := providers.NewProviderRegistry()
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", publicKeyPEM, nil))
+
+	svc := NewService(
+		integrationRepo,
+		webhookRepo,
+		eventRepo,
+		newMockWebhookPlatformRepo(),
+		configRepo,
+		registry,
+		dispatcher,
+		zerolog.Nop(),
+	)
+
+	return svc, integrationRepo, webhookRepo, eventRepo, configRepo, priv
+}
+
+func TestProcessWebhook_InstallResolvesPreProvisionedIntegration(t *testing.T) {
+	t.Parallel()
+
+	dispatcher := &mockWebhookDispatcher{}
+	svc, integrationRepo, _, eventRepo, _, priv := newTestWebhookService(t, dispatcher)
+
+	// Pre-provisioned integration with external_account_id = GHL locationId.
+	clientID := uuid.New()
+	platformID := uuid.New()
+	integrationID := uuid.New()
+	integrationRepo.integrations[integrationID.String()] = sqlc.Integration{
+		ID:                integrationID,
+		ClientID:          clientID,
+		PlatformID:        platformID,
+		ExternalAccountID: "GHL_LOCATION_A",
+		Status:            sqlc.IntegrationStatusCREATED,
+	}
+
+	// GHL INSTALL webhook payload.
+	body := []byte(`{"type":"INSTALL","appId":"app-1","locationId":"GHL_LOCATION_A","companyId":"company-1","timestamp":"2026-08-17T09:06:59.366Z","webhookId":"evt-install-1"}`)
+	headers := map[string]string{
+		"X-GHL-Signature": signWebhookBody(t, priv, body),
+	}
+
+	err := svc.ProcessWebhook(context.Background(), "highlevel", headers, body)
+	if err != nil {
+		t.Fatalf("ProcessWebhook failed: %v", err)
+	}
+
+	// The INSTALL handler must have been dispatched.
+	if len(dispatcher.events) != 1 {
+		t.Fatalf("expected 1 dispatched event, got %d", len(dispatcher.events))
+	}
+	if dispatcher.events[0].EventType != "INSTALL" {
+		t.Fatalf("dispatched event type = %s, want INSTALL", dispatcher.events[0].EventType)
+	}
+	if dispatcher.events[0].LocationID != "GHL_LOCATION_A" {
+		t.Fatalf("dispatched event LocationID = %q, want GHL_LOCATION_A", dispatcher.events[0].LocationID)
+	}
+
+	// The event must be persisted for idempotency.
+	if len(eventRepo.events) != 1 {
+		t.Fatalf("expected 1 persisted event, got %d", len(eventRepo.events))
+	}
+}
+
+func TestProcessWebhook_InstallCreatesConfig(t *testing.T) {
+	t.Parallel()
+
+	// Use the real HighLevel dispatcher so the INSTALL handler creates the
+	// payment_provider_configs record.
+	integrationRepo := newMockWebhookIntegrationRepo()
+	configRepo := newMockPaymentProviderConfigRepo()
+	dispatcher := providers.NewHighLevelWebhookDispatcher(
+		&testWebhookLogger{},
+		integrationRepo,
+		configRepo,
+		providers.ProviderConfigSettings{Name: "RVPay", QueryURL: "https://api.example.com/query", PaymentsURL: "https://checkout.example.com/pay"},
+	)
+
+	publicKeyPEM, priv := testWebhookEd25519KeyPair(t)
+	registry := providers.NewProviderRegistry()
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", publicKeyPEM, nil))
+
+	svc := NewService(
+		integrationRepo,
+		newMockWebhookRepo(),
+		newMockWebhookEventRepo(),
+		newMockWebhookPlatformRepo(),
+		configRepo,
+		registry,
+		dispatcher,
+		zerolog.Nop(),
+	)
+
+	// Pre-provisioned integration with external_account_id = GHL locationId.
+	clientID := uuid.New()
+	platformID := uuid.New()
+	integrationID := uuid.New()
+	integrationRepo.integrations[integrationID.String()] = sqlc.Integration{
+		ID:                integrationID,
+		ClientID:          clientID,
+		PlatformID:        platformID,
+		ExternalAccountID: "GHL_LOCATION_A",
+		Status:            sqlc.IntegrationStatusCREATED,
+	}
+
+	body := []byte(`{"type":"INSTALL","appId":"app-1","locationId":"GHL_LOCATION_A","companyId":"company-1","timestamp":"2026-08-17T09:06:59.366Z","webhookId":"evt-install-1"}`)
+	headers := map[string]string{
+		"X-GHL-Signature": signWebhookBody(t, priv, body),
+	}
+
+	err := svc.ProcessWebhook(context.Background(), "highlevel", headers, body)
+	if err != nil {
+		t.Fatalf("ProcessWebhook failed: %v", err)
+	}
+
+	// The config must be created for the resolved integration.
+	if len(configRepo.configs) != 1 {
+		t.Fatalf("expected 1 config, got %d", len(configRepo.configs))
+	}
+	for _, c := range configRepo.configs {
+		if c.IntegrationID != integrationID {
+			t.Fatalf("config IntegrationID = %v, want %v", c.IntegrationID, integrationID)
+		}
+		if c.LocationID != "GHL_LOCATION_A" {
+			t.Fatalf("config LocationID = %q, want GHL_LOCATION_A", c.LocationID)
+		}
+	}
+}
+
+func TestProcessWebhook_InstallReusesExistingConfig(t *testing.T) {
+	t.Parallel()
+
+	integrationRepo := newMockWebhookIntegrationRepo()
+	configRepo := newMockPaymentProviderConfigRepo()
+	dispatcher := providers.NewHighLevelWebhookDispatcher(
+		&testWebhookLogger{},
+		integrationRepo,
+		configRepo,
+		providers.ProviderConfigSettings{},
+	)
+
+	publicKeyPEM, priv := testWebhookEd25519KeyPair(t)
+	registry := providers.NewProviderRegistry()
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", publicKeyPEM, nil))
+
+	svc := NewService(
+		integrationRepo,
+		newMockWebhookRepo(),
+		newMockWebhookEventRepo(),
+		newMockWebhookPlatformRepo(),
+		configRepo,
+		registry,
+		dispatcher,
+		zerolog.Nop(),
+	)
+
+	clientID := uuid.New()
+	platformID := uuid.New()
+	integrationID := uuid.New()
+	integrationRepo.integrations[integrationID.String()] = sqlc.Integration{
+		ID:                integrationID,
+		ClientID:          clientID,
+		PlatformID:        platformID,
+		ExternalAccountID: "GHL_LOCATION_A",
+		Status:            sqlc.IntegrationStatusCREATED,
+	}
+	// Pre-existing config for the integration.
+	configRepo.configs["existing"] = sqlc.PaymentProviderConfig{
+		ID:            uuid.New(),
+		IntegrationID: integrationID,
+		LocationID:    "GHL_LOCATION_A",
+	}
+
+	body := []byte(`{"type":"INSTALL","appId":"app-1","locationId":"GHL_LOCATION_A","companyId":"company-1","timestamp":"2026-08-17T09:06:59.366Z","webhookId":"evt-install-1"}`)
+	headers := map[string]string{
+		"X-GHL-Signature": signWebhookBody(t, priv, body),
+	}
+
+	err := svc.ProcessWebhook(context.Background(), "highlevel", headers, body)
+	if err != nil {
+		t.Fatalf("ProcessWebhook failed: %v", err)
+	}
+
+	// The existing config must be reused (not duplicated).
+	if len(configRepo.configs) != 1 {
+		t.Fatalf("expected 1 config (reused), got %d", len(configRepo.configs))
+	}
+}
+
+func TestProcessWebhook_InstallMultipleClientsSelectsCorrect(t *testing.T) {
+	t.Parallel()
+
+	integrationRepo := newMockWebhookIntegrationRepo()
+	configRepo := newMockPaymentProviderConfigRepo()
+	dispatcher := providers.NewHighLevelWebhookDispatcher(
+		&testWebhookLogger{},
+		integrationRepo,
+		configRepo,
+		providers.ProviderConfigSettings{},
+	)
+
+	publicKeyPEM, priv := testWebhookEd25519KeyPair(t)
+	registry := providers.NewProviderRegistry()
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", publicKeyPEM, nil))
+
+	svc := NewService(
+		integrationRepo,
+		newMockWebhookRepo(),
+		newMockWebhookEventRepo(),
+		newMockWebhookPlatformRepo(),
+		configRepo,
+		registry,
+		dispatcher,
+		zerolog.Nop(),
+	)
+
+	// Client A -> Integration A (location LOCATION_A)
+	clientA := uuid.New()
+	platformID := uuid.New()
+	integrationA := uuid.New()
+	integrationRepo.integrations[integrationA.String()] = sqlc.Integration{
+		ID:                integrationA,
+		ClientID:          clientA,
+		PlatformID:        platformID,
+		ExternalAccountID: "LOCATION_A",
+		Status:            sqlc.IntegrationStatusCREATED,
+	}
+
+	// Client B -> Integration B (location LOCATION_B)
+	clientB := uuid.New()
+	integrationB := uuid.New()
+	integrationRepo.integrations[integrationB.String()] = sqlc.Integration{
+		ID:                integrationB,
+		ClientID:          clientB,
+		PlatformID:        platformID,
+		ExternalAccountID: "LOCATION_B",
+		Status:            sqlc.IntegrationStatusCREATED,
+	}
+
+	// INSTALL for Client B's location must resolve to Integration B, not A.
+	body := []byte(`{"type":"INSTALL","appId":"app-1","locationId":"LOCATION_B","companyId":"company-1","timestamp":"2026-08-17T09:06:59.366Z","webhookId":"evt-install-B"}`)
+	headers := map[string]string{
+		"X-GHL-Signature": signWebhookBody(t, priv, body),
+	}
+
+	err := svc.ProcessWebhook(context.Background(), "highlevel", headers, body)
+	if err != nil {
+		t.Fatalf("ProcessWebhook failed: %v", err)
+	}
+
+	if len(configRepo.configs) != 1 {
+		t.Fatalf("expected 1 config, got %d", len(configRepo.configs))
+	}
+	for _, c := range configRepo.configs {
+		if c.IntegrationID != integrationB {
+			t.Fatalf("config IntegrationID = %v, want %v (Client B's integration)", c.IntegrationID, integrationB)
+		}
+		if c.LocationID != "LOCATION_B" {
+			t.Fatalf("config LocationID = %q, want LOCATION_B", c.LocationID)
+		}
+	}
+}
+
+func TestProcessWebhook_InstallMissingMappingFailsSafely(t *testing.T) {
+	t.Parallel()
+
+	integrationRepo := newMockWebhookIntegrationRepo()
+	configRepo := newMockPaymentProviderConfigRepo()
+	dispatcher := providers.NewHighLevelWebhookDispatcher(
+		&testWebhookLogger{},
+		integrationRepo,
+		configRepo,
+		providers.ProviderConfigSettings{},
+	)
+
+	publicKeyPEM, priv := testWebhookEd25519KeyPair(t)
+	registry := providers.NewProviderRegistry()
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", publicKeyPEM, nil))
+
+	svc := NewService(
+		integrationRepo,
+		newMockWebhookRepo(),
+		newMockWebhookEventRepo(),
+		newMockWebhookPlatformRepo(),
+		configRepo,
+		registry,
+		dispatcher,
+		zerolog.Nop(),
+	)
+
+	// No integration or config exists for this location.
+	body := []byte(`{"type":"INSTALL","appId":"app-1","locationId":"UNKNOWN_LOC","companyId":"company-1","timestamp":"2026-08-17T09:06:59.366Z","webhookId":"evt-install-unknown"}`)
+	headers := map[string]string{
+		"X-GHL-Signature": signWebhookBody(t, priv, body),
+	}
+
+	err := svc.ProcessWebhook(context.Background(), "highlevel", headers, body)
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.NotFound)
+	}
+
+	// No config should be created.
+	if len(configRepo.configs) != 0 {
+		t.Fatalf("expected 0 configs, got %d", len(configRepo.configs))
+	}
+}
+
+func TestProcessWebhook_NonInstallRequiresConfig(t *testing.T) {
+	t.Parallel()
+
+	// Non-INSTALL events must preserve the existing behavior: resolve via the
+	// payment_provider_configs table. If the config does not exist, the event
+	// fails with ErrIntegrationNotFound.
+	integrationRepo := newMockWebhookIntegrationRepo()
+	configRepo := newMockPaymentProviderConfigRepo()
+	dispatcher := &mockWebhookDispatcher{}
+
+	publicKeyPEM, priv := testWebhookEd25519KeyPair(t)
+	registry := providers.NewProviderRegistry()
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", publicKeyPEM, nil))
+
+	svc := NewService(
+		integrationRepo,
+		newMockWebhookRepo(),
+		newMockWebhookEventRepo(),
+		newMockWebhookPlatformRepo(),
+		configRepo,
+		registry,
+		dispatcher,
+		zerolog.Nop(),
+	)
+
+	// A non-INSTALL event (e.g. oauth.revoked) with a locationId but no config.
+	body := []byte(`{"type":"oauth.revoked","appId":"app-1","locationId":"GHL_LOCATION_A","companyId":"company-1","timestamp":"2026-08-17T09:06:59.366Z","webhookId":"evt-revoked-1"}`)
+	headers := map[string]string{
+		"X-GHL-Signature": signWebhookBody(t, priv, body),
+	}
+
+	err := svc.ProcessWebhook(context.Background(), "highlevel", headers, body)
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("status code = %s, want %s (non-INSTALL requires config)", status.Code(err), codes.NotFound)
+	}
+
+	// The dispatcher must NOT have been called.
+	if len(dispatcher.events) != 0 {
+		t.Fatalf("expected 0 dispatched events, got %d", len(dispatcher.events))
+	}
+}
+
+// testWebhookLogger is a no-op Logger for dispatcher tests.
+type testWebhookLogger struct{}
+
+func (l *testWebhookLogger) Info(msg string, args ...interface{}) {}

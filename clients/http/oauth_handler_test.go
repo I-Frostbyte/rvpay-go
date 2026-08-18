@@ -274,9 +274,14 @@ func TestOAuthCallback_MissingCode(t *testing.T) {
 	}
 }
 
-func TestOAuthCallback_MissingState(t *testing.T) {
+func TestOAuthCallback_NoState_ConfigRepoNotConfigured(t *testing.T) {
 	t.Parallel()
 
+	// State is optional. When state is absent, the service attempts to resolve
+	// the client/platform context from the GHL locationId. The test handler is
+	// wired with a nil config repo, so the stateless resolution fails with
+	// ErrProviderConfigRepoNotConfigured (FailedPrecondition), which maps to a
+	// 400 response.
 	handler, _, _, _ := newTestOAuthHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "/oauth/callback?code=abc", nil)
 	rec := httptest.NewRecorder()

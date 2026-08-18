@@ -749,9 +749,14 @@ func TestHandleCallbackMissingCode(t *testing.T) {
 	}
 }
 
-func TestHandleCallbackMissingState(t *testing.T) {
+func TestHandleCallbackNoState_ProviderNotSupported(t *testing.T) {
 	t.Parallel()
 
+	// State is optional. When state is absent, the service attempts to resolve
+	// the client/platform context from the GHL locationId. With an empty
+	// registry, no HighLevel provider is available, so the flow fails with
+	// ErrProviderNotSupported (FailedPrecondition) rather than treating the
+	// missing state as an invalid argument.
 	svc := NewService(
 		newMockIntegrationRepo(),
 		newMockOAuthTokenRepo(),
@@ -766,8 +771,149 @@ func TestHandleCallbackMissingState(t *testing.T) {
 	)
 
 	_, err := svc.HandleCallback(context.Background(), "code", "")
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("status code = %s, want %s", status.Code(err), codes.InvalidArgument)
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.FailedPrecondition)
+	}
+}
+
+func TestHandleCallbackNoState_ConfigRepoNotConfigured(t *testing.T) {
+	t.Parallel()
+
+	// When state is absent and the payment provider config repo is nil, the
+	// stateless resolution cannot proceed and returns a clear error.
+	registry := providers.NewProviderRegistry()
+	registry.Register(providers.NewHighLevelProvider("test-client", "test-secret", "https://example.com/callback", "", nil))
+
+	svc := NewService(
+		newMockIntegrationRepo(),
+		newMockOAuthTokenRepo(),
+		newMockClientRepo(),
+		newMockPlatformRepo(),
+		newMockOAuthStateRepo(),
+		nil, // nil config repo
+		registry,
+		"https://example.com/callback",
+		ProviderConfigSettings{},
+		zerolog.Nop(),
+	)
+
+	_, err := svc.HandleCallback(context.Background(), "code", "")
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.FailedPrecondition)
+	}
+}
+
+func TestHandleCallbackNoState_LocationIDResolution(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: token exchange returns a locationId, and payment
+	// provider endpoints succeed.
+	svc, integrationRepo, _, clientRepo, platformRepo, _, configRepo := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"success":true}`))
+	})
+
+	clientID := uuid.New()
+	platformID := uuid.New()
+	clientRepo.clients[clientID.String()] = sqlc.Client{ID: clientID, Status: sqlc.ClientStatusACTIVE}
+	platformRepo.platforms[platformID.String()] = sqlc.Platform{ID: platformID, Name: "HighLevel", Slug: "highlevel", Enabled: true}
+
+	// Create an integration so the config can reference it.
+	integration, err := integrationRepo.Create(context.Background(), clientID, platformID, "loc-123", sqlc.IntegrationStatusACTIVE)
+	if err != nil {
+		t.Fatalf("create integration: %v", err)
+	}
+
+	// Create a payment provider config keyed by the GHL locationId.
+	_, err = configRepo.Create(context.Background(), integration.ID, "RVPay", "RVPay payment provider", "https://example.com/logo.jpg", "loc-123", "https://api.example.com/payments/custom-provider/query", "https://checkout.example.com/payment/checkout", false, "test-api-key")
+	if err != nil {
+		t.Fatalf("create config: %v", err)
+	}
+
+	// Call HandleCallback with code and no state. The service exchanges the
+	// code, obtains the locationId, resolves it to the integration, and
+	// continues the ProcessCallback flow. Because the integration already
+	// exists, ProcessCallback returns ErrIntegrationAlreadyExists, which
+	// proves the locationId-based resolution reached ProcessCallback with the
+	// resolved clientID/platformID.
+	_, err = svc.HandleCallback(context.Background(), "test-code", "")
+	if status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("status code = %s, want %s (integration already exists proves resolution reached ProcessCallback)", status.Code(err), codes.AlreadyExists)
+	}
+}
+
+func TestHandleCallbackNoState_ResolvesByExternalAccountID(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: token exchange returns a locationId, and payment
+	// provider endpoints succeed.
+	svc, integrationRepo, tokenRepo, clientRepo, platformRepo, _, configRepo := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"success":true}`))
+	})
+
+	clientID := uuid.New()
+	platformID := uuid.New()
+	clientRepo.clients[clientID.String()] = sqlc.Client{ID: clientID, Status: sqlc.ClientStatusACTIVE}
+	platformRepo.platforms[platformID.String()] = sqlc.Platform{ID: platformID, Name: "HighLevel", Slug: "highlevel", Enabled: true}
+
+	// Pre-provision a CREATED integration with external_account_id = GHL
+	// locationId (the deterministic provisioning mapping).
+	preProvisioned, err := integrationRepo.Create(context.Background(), clientID, platformID, "loc-123", sqlc.IntegrationStatusCREATED)
+	if err != nil {
+		t.Fatalf("create pre-provisioned integration: %v", err)
+	}
+
+	// Call HandleCallback with code and no state. The service exchanges the
+	// code, obtains the locationId, resolves the integration via
+	// external_account_id, and reuses the CREATED integration (activating it).
+	result, err := svc.HandleCallback(context.Background(), "test-code", "")
+	if err != nil {
+		t.Fatalf("HandleCallback failed: %v", err)
+	}
+
+	// The pre-provisioned integration must be reused and activated.
+	if result.IntegrationID != preProvisioned.ID {
+		t.Fatalf("IntegrationID = %v, want %v (pre-provisioned)", result.IntegrationID, preProvisioned.ID)
+	}
+	if result.ClientID != clientID {
+		t.Fatalf("ClientID = %v, want %v", result.ClientID, clientID)
+	}
+	if result.PlatformID != platformID {
+		t.Fatalf("PlatformID = %v, want %v", result.PlatformID, platformID)
+	}
+
+	// The integration must be ACTIVE.
+	reused, ok := integrationRepo.integrations[preProvisioned.ID.String()]
+	if !ok {
+		t.Fatal("pre-provisioned integration was not reused")
+	}
+	if reused.Status != sqlc.IntegrationStatusACTIVE {
+		t.Fatalf("reused integration status = %s, want ACTIVE", reused.Status)
+	}
+
+	// Token and config must be persisted for the reused integration.
+	if len(tokenRepo.tokens) != 1 {
+		t.Fatalf("expected 1 token, got %d", len(tokenRepo.tokens))
+	}
+	if len(configRepo.configs) != 1 {
+		t.Fatalf("expected 1 provider config, got %d", len(configRepo.configs))
+	}
+}
+
+func TestHandleCallbackNoState_LocationIDNotFound(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: token exchange returns a locationId that has no matching
+	// payment provider config.
+	svc, _, _, _, _, _, _ := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"success":true}`))
+	})
+
+	_, err := svc.HandleCallback(context.Background(), "test-code", "")
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.NotFound)
 	}
 }
 
@@ -983,6 +1129,106 @@ func setupRegistrationContext(t *testing.T, clientRepo *mockClientRepo, platform
 	}
 
 	return clientID, platformID, state
+}
+
+func TestProcessCallback_ReusesCreatedIntegration(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: both association and config creation succeed.
+	svc, integrationRepo, tokenRepo, clientRepo, platformRepo, stateRepo, configRepo := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/payments/custom-provider/provider":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"success":true}`))
+		case "/payments/custom-provider/connect":
+			if r.Method == http.MethodPost {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"success":true}`))
+			} else {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+
+	clientID, platformID, state := setupRegistrationContext(t, clientRepo, platformRepo, stateRepo)
+
+	// Pre-provision a CREATED integration (simulating InstallIntegration).
+	preProvisioned, err := integrationRepo.Create(context.Background(), clientID, platformID, "", sqlc.IntegrationStatusCREATED)
+	if err != nil {
+		t.Fatalf("create pre-provisioned integration: %v", err)
+	}
+
+	result, err := svc.HandleCallback(context.Background(), "test-code", state)
+	if err != nil {
+		t.Fatalf("HandleCallback failed: %v", err)
+	}
+
+	if !result.ProviderRegistered {
+		t.Fatal("ProviderRegistered should be true")
+	}
+	if result.ProviderRegistrationError != nil {
+		t.Fatalf("ProviderRegistrationError should be nil, got %v", result.ProviderRegistrationError)
+	}
+
+	// The pre-provisioned integration must be reused (not a new one created).
+	if len(integrationRepo.integrations) != 1 {
+		t.Fatalf("expected 1 integration (reused), got %d", len(integrationRepo.integrations))
+	}
+	reused, ok := integrationRepo.integrations[preProvisioned.ID.String()]
+	if !ok {
+		t.Fatal("pre-provisioned integration was not reused")
+	}
+	if reused.Status != sqlc.IntegrationStatusACTIVE {
+		t.Fatalf("reused integration status = %s, want ACTIVE", reused.Status)
+	}
+	if reused.ClientID != clientID {
+		t.Fatalf("reused integration ClientID = %v, want %v", reused.ClientID, clientID)
+	}
+	if reused.PlatformID != platformID {
+		t.Fatalf("reused integration PlatformID = %v, want %v", reused.PlatformID, platformID)
+	}
+
+	// Token and config must be persisted for the reused integration.
+	if len(tokenRepo.tokens) != 1 {
+		t.Fatalf("expected 1 token, got %d", len(tokenRepo.tokens))
+	}
+	if len(configRepo.configs) != 1 {
+		t.Fatalf("expected 1 provider config, got %d", len(configRepo.configs))
+	}
+	for _, config := range configRepo.configs {
+		if config.IntegrationID != preProvisioned.ID {
+			t.Fatalf("config IntegrationID = %v, want %v", config.IntegrationID, preProvisioned.ID)
+		}
+		if config.LocationID != "loc-123" {
+			t.Fatalf("config LocationID = %q, want loc-123", config.LocationID)
+		}
+	}
+}
+
+func TestProcessCallback_ActiveIntegrationStillConflicts(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: both association and config creation succeed.
+	svc, integrationRepo, _, clientRepo, platformRepo, stateRepo, _ := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"success":true}`))
+	})
+
+	clientID, platformID, state := setupRegistrationContext(t, clientRepo, platformRepo, stateRepo)
+
+	// Pre-provision an ACTIVE integration (not CREATED). This is a genuine
+	// conflict and must return ErrIntegrationAlreadyExists.
+	_, err := integrationRepo.Create(context.Background(), clientID, platformID, "loc-123", sqlc.IntegrationStatusACTIVE)
+	if err != nil {
+		t.Fatalf("create active integration: %v", err)
+	}
+
+	_, err = svc.HandleCallback(context.Background(), "test-code", state)
+	if status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("status code = %s, want %s", status.Code(err), codes.AlreadyExists)
+	}
 }
 
 func TestProcessCallback_ProviderRegistrationSuccess(t *testing.T) {

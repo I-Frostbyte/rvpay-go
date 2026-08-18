@@ -81,7 +81,7 @@ func (s *IntegrationsServiceImpl) InstallIntegration(ctx context.Context, req *c
 		return nil, translateRepoError(err)
 	}
 
-	integration, err := s.integrationsRepo.Create(ctx, clientID, platformID, "", sqlc.IntegrationStatusCREATED)
+	integration, err := s.integrationsRepo.Create(ctx, clientID, platformID, req.GetExternalAccountId(), sqlc.IntegrationStatusCREATED)
 	if err != nil {
 		return nil, translateRepoError(err)
 	}
