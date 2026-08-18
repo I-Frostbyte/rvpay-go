@@ -842,6 +842,65 @@ func TestHandleCallbackNoState_LocationIDResolution(t *testing.T) {
 	}
 }
 
+func TestHandleCallbackNoState_ResolvesByExternalAccountID(t *testing.T) {
+	t.Parallel()
+
+	// Mock HighLevel: token exchange returns a locationId, and payment
+	// provider endpoints succeed.
+	svc, integrationRepo, tokenRepo, clientRepo, platformRepo, _, configRepo := newRegistrationTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"success":true}`))
+	})
+
+	clientID := uuid.New()
+	platformID := uuid.New()
+	clientRepo.clients[clientID.String()] = sqlc.Client{ID: clientID, Status: sqlc.ClientStatusACTIVE}
+	platformRepo.platforms[platformID.String()] = sqlc.Platform{ID: platformID, Name: "HighLevel", Slug: "highlevel", Enabled: true}
+
+	// Pre-provision a CREATED integration with external_account_id = GHL
+	// locationId (the deterministic provisioning mapping).
+	preProvisioned, err := integrationRepo.Create(context.Background(), clientID, platformID, "loc-123", sqlc.IntegrationStatusCREATED)
+	if err != nil {
+		t.Fatalf("create pre-provisioned integration: %v", err)
+	}
+
+	// Call HandleCallback with code and no state. The service exchanges the
+	// code, obtains the locationId, resolves the integration via
+	// external_account_id, and reuses the CREATED integration (activating it).
+	result, err := svc.HandleCallback(context.Background(), "test-code", "")
+	if err != nil {
+		t.Fatalf("HandleCallback failed: %v", err)
+	}
+
+	// The pre-provisioned integration must be reused and activated.
+	if result.IntegrationID != preProvisioned.ID {
+		t.Fatalf("IntegrationID = %v, want %v (pre-provisioned)", result.IntegrationID, preProvisioned.ID)
+	}
+	if result.ClientID != clientID {
+		t.Fatalf("ClientID = %v, want %v", result.ClientID, clientID)
+	}
+	if result.PlatformID != platformID {
+		t.Fatalf("PlatformID = %v, want %v", result.PlatformID, platformID)
+	}
+
+	// The integration must be ACTIVE.
+	reused, ok := integrationRepo.integrations[preProvisioned.ID.String()]
+	if !ok {
+		t.Fatal("pre-provisioned integration was not reused")
+	}
+	if reused.Status != sqlc.IntegrationStatusACTIVE {
+		t.Fatalf("reused integration status = %s, want ACTIVE", reused.Status)
+	}
+
+	// Token and config must be persisted for the reused integration.
+	if len(tokenRepo.tokens) != 1 {
+		t.Fatalf("expected 1 token, got %d", len(tokenRepo.tokens))
+	}
+	if len(configRepo.configs) != 1 {
+		t.Fatalf("expected 1 provider config, got %d", len(configRepo.configs))
+	}
+}
+
 func TestHandleCallbackNoState_LocationIDNotFound(t *testing.T) {
 	t.Parallel()
 

@@ -7,7 +7,11 @@
 - [x] Multiple-client safety: locationId → specific integration → client; missing mapping fails safely
 - [x] Tests: oauth/webhooks/providers/http/cmd PASS; go vet PASS; gofmt clean
 
-## BLOCKER: First-install mapping
-- [x] Pre-provisioned integration has external_account_id="" (InstallIntegration). No safe GHL locationId → RVPay client mapping on brand-new install without OAuth completing first. Reported per agent 001.
+## BLOCKER RESOLVED: First-install mapping
+- [x] InstallIntegrationRequest now accepts optional external_account_id (backwards-compatible proto field 3)
+- [x] InstallIntegration stores GHL locationId as Integration.external_account_id
+- [x] ProcessWebhook INSTALL resolves via external_account_id BEFORE config exists; dispatches INSTALL handler first
+- [x] Non-INSTALL webhook behavior preserved (config required)
+- [x] go test ./... PASS; go vet ./clients/... PASS; gofmt clean
 
 ## Next: Real HighLevel connectivity testing per clients/docs/connectivity-checklist.md

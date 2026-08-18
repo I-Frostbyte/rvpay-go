@@ -174,31 +174,56 @@ func (s *Service) ProcessWebhook(ctx context.Context, providerID string, headers
 	}
 
 	// For HighLevel webhooks, the GHL appId is NOT an RVPay UUID. Resolve the
-	// actual RVPay integration UUID through the payment_provider_configs table
-	// using the locationId captured during OAuth.
+	// actual RVPay integration UUID deterministically from the GHL locationId.
+	//
+	// For INSTALL events, the pre-provisioned integration mapping
+	// (integration.external_account_id = GHL locationId) is authoritative and
+	// must be resolved BEFORE the payment_provider_configs record exists. The
+	// INSTALL handler is dispatched first so it can create the
+	// payment_provider_configs record idempotently; the webhook subscription
+	// requirement is relaxed for INSTALL because a first installation has no
+	// subscription yet (it is registered after OAuth completes). For
+	// non-INSTALL events, the existing behavior is preserved: resolve via the
+	// payment_provider_configs table, require the webhook subscription, then
+	// dispatch.
 	var integrationID uuid.UUID
+	isInstall := providerID == "highlevel" && (event.EventType == "INSTALL" || event.EventType == "integration.installed")
 	if providerID == "highlevel" && event.LocationID != "" {
-		config, err := s.paymentProviderConfigRepo.GetByLocationID(ctx, event.LocationID)
-		if err == repo.ErrNotFound {
-			return ErrIntegrationNotFound
+		if isInstall {
+			// First-install flow: the integration is pre-provisioned with
+			// external_account_id = GHL locationId. Resolve it directly so the
+			// INSTALL handler can create the payment_provider_configs record.
+			integration, err := s.integrationsRepo.GetByExternalAccountID(ctx, event.LocationID)
+			if err == repo.ErrNotFound {
+				// Fall back to the config mapping (integration already active).
+				config, configErr := s.paymentProviderConfigRepo.GetByLocationID(ctx, event.LocationID)
+				if configErr == repo.ErrNotFound {
+					return ErrIntegrationNotFound
+				}
+				if configErr != nil {
+					return translateError(configErr)
+				}
+				integrationID = config.IntegrationID
+			} else if err != nil {
+				return translateError(err)
+			} else {
+				integrationID = integration.ID
+			}
+		} else {
+			config, err := s.paymentProviderConfigRepo.GetByLocationID(ctx, event.LocationID)
+			if err == repo.ErrNotFound {
+				return ErrIntegrationNotFound
+			}
+			if err != nil {
+				return translateError(err)
+			}
+			integrationID = config.IntegrationID
 		}
-		if err != nil {
-			return translateError(err)
-		}
-		integrationID = config.IntegrationID
 	} else {
 		integrationID, err = uuid.Parse(event.IntegrationID)
 		if err != nil {
 			return ErrInvalidPayload
 		}
-	}
-
-	webhook, err := s.webhookRepo.GetByIntegrationIDAndEndpoint(ctx, integrationID, "")
-	if err == repo.ErrNotFound {
-		return ErrWebhookNotFound
-	}
-	if err != nil {
-		return translateError(err)
 	}
 
 	// Idempotency: record the event atomically. The unique constraint on
@@ -215,6 +240,32 @@ func (s *Service) ProcessWebhook(ctx context.Context, providerID string, headers
 	if err == repo.ErrDuplicate {
 		s.logger.Info().Str("event_id", event.ProviderEventID).Str("integration_id", integrationID.String()).Msg("Duplicate webhook event ignored")
 		return ErrDuplicateEvent
+	}
+	if err != nil {
+		return translateError(err)
+	}
+
+	// For INSTALL events, dispatch the INSTALL handler BEFORE the webhook
+	// subscription check. The INSTALL handler creates/finds the
+	// payment_provider_configs record idempotently. A first installation has
+	// no webhook subscription yet (it is registered after OAuth completes), so
+	// the INSTALL event must not fail merely because the subscription or the
+	// config does not exist yet.
+	if isInstall {
+		if s.dispatcher != nil {
+			err = s.dispatcher.Dispatch(ctx, event)
+			if err != nil {
+				s.logger.Error().Err(err).Str("event_id", event.ProviderEventID).Msg("Webhook event dispatch failed")
+				return err
+			}
+		}
+		s.logger.Info().Str("provider", providerID).Str("event_type", event.EventType).Str("event_id", event.ProviderEventID).Msg("Webhook processed successfully")
+		return nil
+	}
+
+	webhook, err := s.webhookRepo.GetByIntegrationIDAndEndpoint(ctx, integrationID, "")
+	if err == repo.ErrNotFound {
+		return ErrWebhookNotFound
 	}
 	if err != nil {
 		return translateError(err)

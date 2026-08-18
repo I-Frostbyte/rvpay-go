@@ -208,6 +208,11 @@ message InstallIntegrationRequest {
   string client_id = 1;
   // platform_id is the unique identifier of the platform to connect.
   string platform_id = 2;
+  // external_account_id is the provider-side account identifier (e.g. the GHL
+  // locationId) that deterministically maps this integration to the correct
+  // client. It is optional and backwards-compatible; when omitted the
+  // integration is created without a provider account binding.
+  string external_account_id = 3;
 }
 
 // InstallIntegrationResponse is the response after installing an integration.
