@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: "CloudWatch monitoring for RVPay"
+
+Parameters:
+  EnvId:
+    Type: String
+    AllowedPattern: "[a-z][a-z0-9]{2,19}"
+
+  NotificationEmail:
+    Type: String
+    Default: ""
+
+  DiscordWebhookUrl:
+    Type: String
+    Default: ""
+    NoEcho: true
+
+  ClientsServiceName:
+    Type: String
+    Default: ""
+
+  TransactionsServiceName:
+    Type: String
+    Default: ""
+
+Conditions:
+  HasNotificationEmail: !Not
+    - !Equals [!Ref NotificationEmail, ""]
+
+Resources:
+  MonitoringTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${EnvId}-monitoring"
+
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasNotificationEmail
+    Properties:
+      TopicArn: !Ref MonitoringTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+Outputs:
+  MonitoringTopicArn:
+    Description: "SNS topic used for RVPay monitoring notifications"
+    Value: !Ref MonitoringTopic
