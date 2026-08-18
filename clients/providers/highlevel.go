@@ -42,9 +42,9 @@ func NewHighLevelProvider(clientID, clientSecret, redirectURI, webhookPublicKey 
 		clientSecret:     clientSecret,
 		webhookPublicKey: webhookPublicKey,
 		redirectURI:      redirectURI,
-		authURL:          "https://api.highlevel.com/oauth/authorize",
-		tokenURL:         "https://api.highlevel.com/oauth/token",
-		userInfoURL:      "https://api.highlevel.com/v1/users/me",
+		authURL:          "https://marketplace.gohighlevel.com/oauth/chooselocation",
+		tokenURL:         "https://services.leadconnectorhq.com/oauth/token",
+		userInfoURL:      "https://services.leadconnectorhq.com/oauth/userinfo",
 		scopes:           []string{"read", "write"},
 		// A single shared client is reused across all provider calls so HTTP
 		// connections are pooled and reused rather than recreated per request.

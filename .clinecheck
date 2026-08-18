@@ -1,17 +1,11 @@
 # RVPay Go — Stage Checkpoint
 
-## Stage: Agent 001 — First-Install OAuth + Client Resolution — COMPLETE
-- [x] Stateless callback resolves via integration.external_account_id, falls back to payment_provider_configs.location_id
-- [x] ProcessCallback reuses CREATED integration (activates) instead of ErrIntegrationAlreadyExists; ACTIVE still conflicts
-- [x] INSTALL webhook dispatcher creates/finds payment_provider_configs idempotently; wired in main.go
-- [x] Multiple-client safety: locationId → specific integration → client; missing mapping fails safely
-- [x] Tests: oauth/webhooks/providers/http/cmd PASS; go vet PASS; gofmt clean
-
-## BLOCKER RESOLVED: First-install mapping
-- [x] InstallIntegrationRequest now accepts optional external_account_id (backwards-compatible proto field 3)
-- [x] InstallIntegration stores GHL locationId as Integration.external_account_id
-- [x] ProcessWebhook INSTALL resolves via external_account_id BEFORE config exists; dispatches INSTALL handler first
-- [x] Non-INSTALL webhook behavior preserved (config required)
-- [x] go test ./... PASS; go vet ./clients/... PASS; gofmt clean
+## Stage: Agent 002 — GHL Marketplace OAuth Endpoints — COMPLETE
+- [x] highlevel.go: authURL → marketplace.gohighlevel.com/oauth/chooselocation
+- [x] highlevel.go: tokenURL → services.leadconnectorhq.com/oauth/token
+- [x] highlevel.go: userInfoURL → services.leadconnectorhq.com/oauth/userinfo
+- [x] Request bodies already conform to current GHL Marketplace OAuth (grant_type, client_id, client_secret, code, redirect_uri)
+- [x] go build ./clients/... PASS; go test ./clients/... PASS; go vet PASS; gofmt clean
+- [x] Fresh Sub-account install covered by stateless-callback tests (token exchange → locationId → integration reuse → registration)
 
 ## Next: Real HighLevel connectivity testing per clients/docs/connectivity-checklist.md
