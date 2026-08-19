@@ -76,6 +76,18 @@ Parameters:
     Type: String
     Default: "https://services.leadconnectorhq.com"
 
+  LoadBalancerListenerArn:
+    Type: String
+    Description: ARN of the HTTPS listener for the RVPay load balancer.
+
+  LoadBalancerSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group ID of the RVPay load balancer.
+
+  DomainName:
+    Type: String
+    Description: Domain name used by RVPay.
+
 Resources:
   AppDatabaseSecret:
     Type: AWS::SecretsManager::Secret
@@ -248,6 +260,11 @@ Resources:
       Cluster: !Ref ClusterArn
       TaskDefinition: !Ref TaskDefinition
 
+      LoadBalancers:
+        - ContainerName: App
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref ClientsTargetGroup
+
       DeploymentConfiguration:
         MinimumHealthyPercent: 100
         MaximumPercent: 200
@@ -266,6 +283,38 @@ Resources:
             ClientAliases:
               - DnsName: !Ref AppName
                 Port: !Ref ContainerPort
+
+  ClientsTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${EnvId}-ClientsTargetGroup"
+      VpcId: !Ref VPC
+      Protocol: HTTP
+      Port: 80
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: traffic-port
+      HealthCheckPath: /healthz
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+
+  ClientsListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref LoadBalancerListenerArn
+      Priority: 100
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values:
+              - !Ref DomainName
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ClientsTargetGroup
+
 
 Outputs:
   ServiceName:

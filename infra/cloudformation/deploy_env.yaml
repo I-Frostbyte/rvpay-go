@@ -30,6 +30,10 @@ Parameters:
     Type: String
     Description: Domain name used by RVPay.
 
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN for the environment API domain.
+
   NotificationEmail:
     Type: String
     Default: ""
@@ -47,7 +51,7 @@ Parameters:
     AllowedValues:
       - "true"
       - "false"
-      
+
 Resources:
 
   LogGroup:
@@ -107,6 +111,24 @@ Resources:
         - Bucket: !Ref InfraArtifactsBucket
           ReleaseHash: !Ref InfraReleaseHash
 
+  LoadBalancerStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - VpcStack
+    Properties:
+      Parameters:
+        EnvId: !Ref EnvId
+        VPC: !GetAtt VpcStack.Outputs.VPC
+        CertificateArn: !Ref CertificateArn
+        SubnetIds: !Join
+          - ","
+          - - !GetAtt VpcStack.Outputs.SubnetAPublic
+            - !GetAtt VpcStack.Outputs.SubnetBPublic
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/cloudformation/${ReleaseHash}/aws-cloudformation-templates/core-components/load_balancer.yaml"
+        - Bucket: !Ref InfraArtifactsBucket
+          ReleaseHash: !Ref InfraReleaseHash
+
   ThirdPartySecretsStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -133,6 +155,7 @@ Resources:
       - EcsStack
       - RdsStack
       - ThirdPartySecretsStack
+      - LoadBalancerStack
     Properties:
       Parameters:
         EnvId: !Ref EnvId
@@ -152,6 +175,9 @@ Resources:
         HighLevelQueryUrl: !Sub "https://${DomainName}/payments/query"
         PublicBaseUrl: !Sub "https://${DomainName}"
         TransactionsGrpcAddr: "transactions:80"
+        LoadBalancerListenerArn: !GetAtt LoadBalancerStack.Outputs.ListenerHTTPS
+        LoadBalancerSecurityGroupId: !GetAtt LoadBalancerStack.Outputs.LoadBalancerSecurityGroupId
+        DomainName: !Ref DomainName
       TemplateURL: !Sub
         - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/cloudformation/${ReleaseHash}/services/clients.yaml"
         - Bucket: !Ref InfraArtifactsBucket
@@ -162,6 +188,7 @@ Resources:
     DependsOn:
       - EcsStack
       - RdsStack
+      - LoadBalancerStack
     Properties:
       Parameters:
         EnvId: !Ref EnvId
@@ -175,6 +202,9 @@ Resources:
         Image: !Ref TransactionsImage
         DbAdminSecretArn: !GetAtt RdsStack.Outputs.AdminSecretArn
         CustomResourcesServiceToken: !GetAtt RdsStack.Outputs.DatabaseInitLambdaArn
+        LoadBalancerListenerArn: !GetAtt LoadBalancerStack.Outputs.ListenerHTTPS
+        LoadBalancerSecurityGroupId: !GetAtt LoadBalancerStack.Outputs.LoadBalancerSecurityGroupId
+        DomainName: !Ref DomainName
       TemplateURL: !Sub
         - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/cloudformation/${ReleaseHash}/services/transactions.yaml"
         - Bucket: !Ref InfraArtifactsBucket

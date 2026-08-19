@@ -1,0 +1,101 @@
+name: Deploy Environments
+
+on:
+  workflow_run:
+    workflows:
+      - Publish Build Artifacts
+    types:
+      - completed
+
+  push:
+    branches:
+      - main
+      - "release/**"
+    paths:
+      - ".github/workflows/deploy_single_environment.yaml"
+      - ".github/workflows/deploy_environments.yaml"
+      - "cd/environments.yaml"
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        required: true
+        type: choice
+        options:
+          - testing
+          - production
+
+permissions:
+  contents: read
+
+jobs:
+  load-environment:
+    name: Load Environment
+    runs-on: ubuntu-latest
+
+    outputs:
+      env_id: ${{ steps.environment.outputs.env_id }}
+      env_name: ${{ steps.environment.outputs.env_name }}
+      git_ref_name: ${{ steps.environment.outputs.git_ref_name }}
+      aws_account_id: ${{ steps.environment.outputs.aws_account_id }}
+      domain_name: ${{ steps.environment.outputs.domain_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Load environment configuration
+        id: environment
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          python - <<'PY'
+          import os
+          import yaml
+
+          target = os.environ["TARGET_ENVIRONMENT"]
+
+          with open("cd/environments.yaml", "r", encoding="utf-8") as f:
+              environments = yaml.safe_load(f)
+
+          environment = next(
+              item for item in environments
+              if item["envId"] == target
+          )
+
+          for key in (
+              "env_id",
+              "env_name",
+              "git_ref_name",
+              "aws_account_id",
+              "domain_name",
+          ):
+              source = {
+                  "env_id": "envId",
+                  "env_name": "name",
+                  "git_ref_name": "gitRefName",
+                  "aws_account_id": "awsAccountId",
+                  "domain_name": "domainName",
+              }[key]
+
+              value = environment[source]
+
+              with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+                  print(f"{key}={value}", file=output)
+          PY
+
+  deploy:
+    name: Deploy ${{ needs.load-environment.outputs.env_name }}
+    needs: load-environment
+
+    uses: ./.github/workflows/deploy_single_environment.yaml
+
+    with:
+      env_id: ${{ needs.load-environment.outputs.env_id }}
+      env_name: ${{ needs.load-environment.outputs.env_name }}
+      git_ref_name: ${{ needs.load-environment.outputs.git_ref_name }}
+      aws_account_id: ${{ needs.load-environment.outputs.aws_account_id }}
+      domain_name: ${{ needs.load-environment.outputs.domain_name }}
+
+    secrets: inherit

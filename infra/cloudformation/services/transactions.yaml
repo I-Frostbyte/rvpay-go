@@ -44,6 +44,17 @@ Parameters:
     Type: String
     Default: "transactions"
 
+  LoadBalancerSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: "Security group ID of the RVPay load balancer."
+
+  LoadBalancerListenerArn:
+    Type: String
+    Description: "ARN of the HTTPS listener for the RVPay load balancer."
+
+  DomainName:
+    Type: String
+
 Resources:
   AppDatabaseSecret:
     Type: AWS::SecretsManager::Secret
@@ -183,6 +194,11 @@ Resources:
       Cluster: !Ref ClusterArn
       TaskDefinition: !Ref TaskDefinition
 
+      LoadBalancers:
+        - ContainerName: App
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref TransactionsTargetGroup
+
       DeploymentConfiguration:
         MinimumHealthyPercent: 100
         MaximumPercent: 200
@@ -201,6 +217,35 @@ Resources:
             ClientAliases:
               - DnsName: !Ref AppName
                 Port: !Ref ContainerPort
+
+  TransactionsTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${EnvId}-transactions"
+      Port: !Ref ContainerPort
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: traffic-port
+      HealthCheckPath: /healthz
+      Matcher:
+        HttpCode: "200"
+
+  TransactionsListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref LoadBalancerListenerArn
+      Priority: 20
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values:
+              - !Sub "transactions.${DomainName}"
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref TransactionsTargetGroup
 
 Outputs:
   ServiceName:

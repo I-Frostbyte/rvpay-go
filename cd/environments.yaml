@@ -1,0 +1,11 @@
+- envId: testing
+  name: Testing
+  gitRefName: release/testing/*
+  awsAccountId: 073078215361
+  domainName: api.rvpay.xyz
+
+- envId: production
+  name: Production
+  gitRefName: release/production/*
+  awsAccountId: 177683310442
+  domainName: api.rvpay.co

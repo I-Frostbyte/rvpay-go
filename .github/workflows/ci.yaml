@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+  pull_request:
+    branches:
+      - main
+      - "release/**"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Run go vet
+        run: go vet ./...
+
+  cloudformation:
+    name: Validate CloudFormation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Validate templates
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
+        working-directory: infra/cloudformation
+        run: |
+          set -e
+
+          while IFS= read -r file; do
+            echo "Validating ${file}"
+            aws cloudformation validate-template \
+              --template-body "file://${file}" \
+              >/dev/null
+          done < <(find . -name '*.yaml' -type f)
+
+      - name: Skip AWS validation
+        if: ${{ secrets.AWS_ACCESS_KEY_ID == '' }}
+        run: |
+          echo "::notice::AWS credentials are not configured; CloudFormation validation skipped."
