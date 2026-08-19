@@ -1,0 +1,20 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: "The SES identities stack for a given domain name"
+
+Parameters:
+  DomainName:
+    Type: String
+
+Resources:
+  EmailIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      DkimAttributes:
+        SigningEnabled: true
+      EmailIdentity: !Ref DomainName
+
+Outputs:
+  EmailIdentity:
+    Description: "SES email identity"
+    Value: !Ref EmailIdentity

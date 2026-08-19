@@ -1,0 +1,330 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: "The Clients service"
+
+Parameters:
+  EnvId:
+    Type: String
+    Description: Environment Id (used to namespace resources)
+    AllowedPattern: "[a-z][a-z0-9]{2,19}"
+    ConstraintDescription: Must be lower case letters between 3 and 20 characters.
+
+  VPC:
+    Type: AWS::EC2::VPC::Id
+
+  LogGroupName:
+    Type: String
+
+  ClusterArn:
+    Type: String
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+
+  Image:
+    Type: String
+
+  DbAdminSecretArn:
+    Type: String
+
+  HighLevelClientSecretArn:
+    Type: String
+
+  CustomResourcesServiceToken:
+    Type: String
+
+  DesiredCount:
+    Type: Number
+    Default: 1
+
+  ContainerPort:
+    Type: Number
+    Default: 80
+
+  AppName:
+    Type: String
+    Default: "clients"
+
+  HighLevelRedirectUri:
+    Type: String
+
+  HighLevelPaymentUrl:
+    Type: String
+
+  HighLevelQueryUrl:
+    Type: String
+
+  PublicBaseUrl:
+    Type: String
+
+  TransactionsGrpcAddr:
+    Type: String
+
+  HighLevelProviderName:
+    Type: String
+    Default: "RVPay"
+
+  HighLevelProviderDescription:
+    Type: String
+    Default: "RVPay payment provider"
+
+  HighLevelProviderImageUrl:
+    Type: String
+    Default: ""
+
+  HighLevelApiBaseUrl:
+    Type: String
+    Default: "https://services.leadconnectorhq.com"
+
+  LoadBalancerListenerArn:
+    Type: String
+    Description: ARN of the HTTPS listener for the RVPay load balancer.
+
+  LoadBalancerSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group ID of the RVPay load balancer.
+
+  DomainName:
+    Type: String
+    Description: Domain name used by RVPay.
+
+Resources:
+  AppDatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "/${EnvId}/${AppName}_database"
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${AppName}", "dbname": "${AppName}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 30
+        ExcludePunctuation: true
+      Tags:
+        - Key: EnvId
+          Value: !Ref EnvId
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${EnvId}-${AppName}"
+      NetworkMode: bridge
+      RequiresCompatibilities:
+        - EC2
+      Memory: 84
+      ExecutionRoleArn: !Ref ExecutionRole
+      TaskRoleArn: !Ref TaskRole
+
+      ContainerDefinitions:
+        - Name: App
+          Image: !Ref Image
+
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+              Name: grpc
+
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroupName
+              awslogs-stream-prefix: !Ref AppName
+
+          Environment:
+            - Name: LISTEN_PORT
+              Value: !Ref ContainerPort
+
+            - Name: PORT
+              Value: !Ref ContainerPort
+
+            - Name: MIGRATION_PATH
+              Value: "/app/migrations"
+
+            - Name: RUN_MIGRATIONS
+              Value: "true"
+
+            - Name: HIGHLEVEL_REDIRECT_URI
+              Value: !Ref HighLevelRedirectUri
+
+            - Name: HIGHLEVEL_WEBHOOK_PUBLIC_KEY
+              Value: |
+                -----BEGIN PUBLIC KEY-----
+                MCowBQYDK2VwAyEAi2HR1srL4o18O8BRa7gVJY7G7bupbN3H9AwJrHCDiOg=
+                -----END PUBLIC KEY-----
+
+            - Name: HIGHLEVEL_PAYMENT_URL
+              Value: !Ref HighLevelPaymentUrl
+
+            - Name: HIGHLEVEL_QUERY_URL
+              Value: !Ref HighLevelQueryUrl
+
+            - Name: HIGHLEVEL_PROVIDER_NAME
+              Value: !Ref HighLevelProviderName
+
+            - Name: HIGHLEVEL_PROVIDER_DESCRIPTION
+              Value: !Ref HighLevelProviderDescription
+
+            - Name: HIGHLEVEL_PROVIDER_IMAGE_URL
+              Value: !Ref HighLevelProviderImageUrl
+
+            - Name: HIGHLEVEL_API_BASE_URL
+              Value: !Ref HighLevelApiBaseUrl
+
+            - Name: PUBLIC_BASE_URL
+              Value: !Ref PublicBaseUrl
+
+            - Name: TRANSACTIONS_GRPC_ADDR
+              Value: !Ref TransactionsGrpcAddr
+
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+
+          Secrets:
+            - Name: DB_NAME
+              ValueFrom: !Sub "${AppDatabaseSecret}:dbname::"
+
+            - Name: DB_USER
+              ValueFrom: !Sub "${AppDatabaseSecret}:username::"
+
+            - Name: DB_HOST
+              ValueFrom: !Sub "${DbAdminSecretArn}:host::"
+
+            - Name: DB_PORT
+              ValueFrom: !Sub "${DbAdminSecretArn}:port::"
+
+            - Name: DB_PASSWORD
+              ValueFrom: !Sub "${AppDatabaseSecret}:password::"
+
+            - Name: HIGHLEVEL_CLIENT_ID
+              ValueFrom: !Sub "${HighLevelClientSecretArn}:client_id::"
+
+            - Name: HIGHLEVEL_CLIENT_SECRET
+              ValueFrom: !Sub "${HighLevelClientSecretArn}:client_secret::"
+
+  AppDatabase:
+    Type: Custom::PgDatabase
+    Properties:
+      ServiceToken: !Ref CustomResourcesServiceToken
+      StackName: !Ref AWS::StackName
+      ServiceTimeout: 120
+      AdminSecretArn: !Ref DbAdminSecretArn
+      ServiceSecretArn: !Ref AppDatabaseSecret
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-EcsExecutionRole"
+
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: "sts:AssumeRole"
+
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+
+      Policies:
+        - PolicyName: secrets-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "secretsmanager:GetResourcePolicy"
+                  - "secretsmanager:GetSecretValue"
+                  - "secretsmanager:DescribeSecret"
+                  - "secretsmanager:ListSecretVersionIds"
+                  - "secretsmanager:ListSecrets"
+                Resource:
+                  - !Ref AppDatabaseSecret
+                  - !Ref DbAdminSecretArn
+                  - !Ref HighLevelClientSecretArn
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvId}-${AppName}-TaskRole"
+
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+
+  EcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub "${EnvId}-${AppName}"
+      Cluster: !Ref ClusterArn
+      TaskDefinition: !Ref TaskDefinition
+
+      LoadBalancers:
+        - ContainerName: App
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref ClientsTargetGroup
+
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+
+      DesiredCount: !Ref DesiredCount
+      LaunchType: EC2
+
+      ServiceConnectConfiguration:
+        Enabled: true
+        Namespace: !Sub "${EnvId}"
+
+        Services:
+          - PortName: grpc
+            DiscoveryName: !Sub "${EnvId}-${AppName}-grpc"
+
+            ClientAliases:
+              - DnsName: !Ref AppName
+                Port: !Ref ContainerPort
+
+  ClientsTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${EnvId}-ClientsTargetGroup"
+      VpcId: !Ref VPC
+      Protocol: HTTP
+      Port: 80
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: traffic-port
+      HealthCheckPath: /healthz
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+
+  ClientsListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref LoadBalancerListenerArn
+      Priority: 100
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values:
+              - !Ref DomainName
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ClientsTargetGroup
+
+
+Outputs:
+  ServiceName:
+    Description: "The name of the RVPay ECS service."
+    Value: !Ref EcsService
+
+  ServiceArn:
+    Description: "The ARN of the RVPay ECS service."
+    Value: !GetAtt EcsService.ServiceArn
+
+  DatabaseSecretArn:
+    Description: "The ARN of the application database credentials secret."
+    Value: !Ref AppDatabaseSecret

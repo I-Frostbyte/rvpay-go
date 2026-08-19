@@ -1,0 +1,90 @@
+name: Deploy Single Environment
+
+on:
+  workflow_call:
+    inputs:
+      env_id:
+        required: true
+        type: string
+
+      env_name:
+        required: true
+        type: string
+
+      git_ref_name:
+        required: true
+        type: string
+
+      aws_account_id:
+        required: true
+        type: string
+
+      domain_name:
+        required: true
+        type: string
+
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+
+      CLOUDFORMATION_ARTIFACTS_BUCKET:
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy RVPay
+    runs-on: ubuntu-latest
+
+    environment:
+      name: ${{ inputs.env_id }}
+
+    permissions:
+      contents: read
+
+    env:
+      AWS_REGION: us-east-1
+      STACK_NAME: RVPay
+      ECR_REGISTRY: ${{ inputs.aws_account_id }}.dkr.ecr.us-east-1.amazonaws.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_ref_name }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Read infrastructure release hash
+        id: infra
+        run: |
+          HASH=$(aws ssm get-parameter \
+            --name "/build-artifact/infra/${{ inputs.git_ref_name }}" \
+            --query "Parameter.Value" \
+            --output text)
+
+          echo "release_hash=${HASH}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Deploy CloudFormation
+        run: |
+          aws cloudformation deploy \
+            --stack-name "${STACK_NAME}" \
+            --template-file infra/cloudformation/deploy_env.yaml \
+            --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --parameter-overrides \
+              EnvId="${{ inputs.env_id }}" \
+              InfraArtifactsBucket="${{ secrets.CLOUDFORMATION_ARTIFACTS_BUCKET }}" \
+              InfraReleaseHash="${{ steps.infra.outputs.release_hash }}" \
+              ClientsImage="${ECR_REGISTRY}/rvpay/clients:${GITHUB_SHA}" \
+              TransactionsImage="${ECR_REGISTRY}/rvpay/transactions:${GITHUB_SHA}" \
+              DomainName="${{ inputs.domain_name }}"

@@ -1,3 +1,6 @@
 [submodule "third_party/googleapis"]
 	path = third_party/googleapis
 	url = https://github.com/googleapis/googleapis.git
+[submodule "infra/cloudformation/aws-cloudformation-templates"]
+	path = infra/cloudformation/aws-cloudformation-templates
+	url = https://github.com/I-Frostbyte/aws-cloudformation-templates.git

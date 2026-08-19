@@ -1,0 +1,227 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: "RVPay environment"
+
+Parameters:
+
+  EnvId:
+    Type: String
+    Description: Environment identifier.
+    AllowedPattern: "[a-z][a-z0-9-]{2,19}"
+    ConstraintDescription: Must be lower case letters and numbers with hyphens, between 3 and 20 characters.
+
+  InfraArtifactsBucket:
+    Type: String
+    Description: S3 bucket containing the CloudFormation artifacts.
+
+  InfraReleaseHash:
+    Type: String
+    Description: CloudFormation artifact release hash.
+
+  ClientsImage:
+    Type: String
+    Description: Container image for the Clients service.
+
+  TransactionsImage:
+    Type: String
+    Description: Container image for the Transactions service.
+
+  DomainName:
+    Type: String
+    Description: Domain name used by RVPay.
+
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN for the environment API domain.
+
+  NotificationEmail:
+    Type: String
+    Default: ""
+    Description: Email address for RVPay monitoring notifications.
+
+  ClassB:
+    Type: Number
+    Default: 20
+    MinValue: 0
+    MaxValue: 255
+
+  IsDevelopmentGrade:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+
+Resources:
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/rvpay/${EnvId}"
+      RetentionInDays: 14
+
+  VpcStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        EnvId: !Ref EnvId
+        ClassB: !Ref ClassB
+        IsDevelopmentGrade: !Ref IsDevelopmentGrade
+        MigratingGrade: "false"
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/cloudformation/${ReleaseHash}/aws-cloudformation-templates/core-components/vpc.yaml"
+        - Bucket: !Ref InfraArtifactsBucket
+          ReleaseHash: !Ref InfraReleaseHash
+
+  RdsStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - VpcStack
+    Properties:
+      Parameters:
+        EnvId: !Ref EnvId
+        VpcId: !GetAtt VpcStack.Outputs.VPC
+        SubnetIds: !Join
+          - ","
+          - - !GetAtt VpcStack.Outputs.SubnetAPrivate
+            - !GetAtt VpcStack.Outputs.SubnetBPrivate
+        IsDevelopmentGrade: !Ref IsDevelopmentGrade
+        LambdaS3BucketName: !Ref InfraArtifactsBucket
+        LambdaS3KeyPrefix: !Sub "cloudformation/${InfraReleaseHash}/"
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/cloudformation/${ReleaseHash}/aws-cloudformation-templates/core-components/rds.yaml"
+        - Bucket: !Ref InfraArtifactsBucket
+          ReleaseHash: !Ref InfraReleaseHash
+
+  EcsStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - VpcStack
+    Properties:
+      Parameters:
+        EnvId: !Ref EnvId
+        VpcId: !GetAtt VpcStack.Outputs.VPC
+        PrivateSubnetIds: !Join
+          - ","
+          - - !GetAtt VpcStack.Outputs.SubnetAPrivate
+            - !GetAtt VpcStack.Outputs.SubnetBPrivate
+        IsDevelopmentGrade: !Ref IsDevelopmentGrade
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/cloudformation/${ReleaseHash}/aws-cloudformation-templates/core-components/ecs.yaml"
+        - Bucket: !Ref InfraArtifactsBucket
+          ReleaseHash: !Ref InfraReleaseHash
+
+  LoadBalancerStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - VpcStack
+    Properties:
+      Parameters:
+        EnvId: !Ref EnvId
+        VPC: !GetAtt VpcStack.Outputs.VPC
+        CertificateArn: !Ref CertificateArn
+        SubnetIds: !Join
+          - ","
+          - - !GetAtt VpcStack.Outputs.SubnetAPublic
+            - !GetAtt VpcStack.Outputs.SubnetBPublic
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/cloudformation/${ReleaseHash}/aws-cloudformation-templates/core-components/load_balancer.yaml"
+        - Bucket: !Ref InfraArtifactsBucket
+          ReleaseHash: !Ref InfraReleaseHash
+
+  ThirdPartySecretsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        EnvId: !Ref EnvId
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/cloudformation/${ReleaseHash}/components/third_party_secrets.yaml"
+        - Bucket: !Ref InfraArtifactsBucket
+          ReleaseHash: !Ref InfraReleaseHash
+
+  SesIdentitiesStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        DomainName: !Ref DomainName
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/cloudformation/${ReleaseHash}/components/ses_identities.yaml"
+        - Bucket: !Ref InfraArtifactsBucket
+          ReleaseHash: !Ref InfraReleaseHash
+
+  ClientsStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - EcsStack
+      - RdsStack
+      - ThirdPartySecretsStack
+      - LoadBalancerStack
+    Properties:
+      Parameters:
+        EnvId: !Ref EnvId
+        VPC: !GetAtt VpcStack.Outputs.VPC
+        LogGroupName: !Ref LogGroup
+        ClusterArn: !GetAtt EcsStack.Outputs.ClusterArn
+        SubnetIds: !Join
+          - ","
+          - - !GetAtt VpcStack.Outputs.SubnetAPrivate
+            - !GetAtt VpcStack.Outputs.SubnetBPrivate
+        Image: !Ref ClientsImage
+        DbAdminSecretArn: !GetAtt RdsStack.Outputs.AdminSecretArn
+        HighLevelClientSecretArn: !GetAtt ThirdPartySecretsStack.Outputs.HighLevelClientSecretArn
+        CustomResourcesServiceToken: !GetAtt RdsStack.Outputs.DatabaseInitLambdaArn
+        HighLevelRedirectUri: !Sub "https://${DomainName}/clients/oauth/callback"
+        HighLevelPaymentUrl: !Sub "https://${DomainName}/payments"
+        HighLevelQueryUrl: !Sub "https://${DomainName}/payments/query"
+        PublicBaseUrl: !Sub "https://${DomainName}"
+        TransactionsGrpcAddr: "transactions:80"
+        LoadBalancerListenerArn: !GetAtt LoadBalancerStack.Outputs.ListenerHTTPS
+        LoadBalancerSecurityGroupId: !GetAtt LoadBalancerStack.Outputs.LoadBalancerSecurityGroupId
+        DomainName: !Ref DomainName
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/cloudformation/${ReleaseHash}/services/clients.yaml"
+        - Bucket: !Ref InfraArtifactsBucket
+          ReleaseHash: !Ref InfraReleaseHash
+
+  TransactionsStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - EcsStack
+      - RdsStack
+      - LoadBalancerStack
+    Properties:
+      Parameters:
+        EnvId: !Ref EnvId
+        VPC: !GetAtt VpcStack.Outputs.VPC
+        LogGroupName: !Ref LogGroup
+        ClusterArn: !GetAtt EcsStack.Outputs.ClusterArn
+        SubnetIds: !Join
+          - ","
+          - - !GetAtt VpcStack.Outputs.SubnetAPrivate
+            - !GetAtt VpcStack.Outputs.SubnetBPrivate
+        Image: !Ref TransactionsImage
+        DbAdminSecretArn: !GetAtt RdsStack.Outputs.AdminSecretArn
+        CustomResourcesServiceToken: !GetAtt RdsStack.Outputs.DatabaseInitLambdaArn
+        LoadBalancerListenerArn: !GetAtt LoadBalancerStack.Outputs.ListenerHTTPS
+        LoadBalancerSecurityGroupId: !GetAtt LoadBalancerStack.Outputs.LoadBalancerSecurityGroupId
+        DomainName: !Ref DomainName
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/cloudformation/${ReleaseHash}/services/transactions.yaml"
+        - Bucket: !Ref InfraArtifactsBucket
+          ReleaseHash: !Ref InfraReleaseHash
+
+  MonitoringStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - ClientsStack
+      - TransactionsStack
+    Properties:
+      Parameters:
+        EnvId: !Ref EnvId
+        NotificationEmail: !Ref NotificationEmail
+        ClientsServiceName: !GetAtt ClientsStack.Outputs.ServiceName
+        TransactionsServiceName: !GetAtt TransactionsStack.Outputs.ServiceName
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/cloudformation/${ReleaseHash}/services/monitoring.yaml"
+        - Bucket: !Ref InfraArtifactsBucket
+          ReleaseHash: !Ref InfraReleaseHash

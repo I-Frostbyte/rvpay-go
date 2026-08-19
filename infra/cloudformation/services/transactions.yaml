@@ -1,0 +1,261 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: "The Transactions service"
+
+Parameters:
+  EnvId:
+    Type: String
+    Description: Environment Id (used to namespace resources)
+    AllowedPattern: "[a-z][a-z0-9]{2,19}"
+    ConstraintDescription: Must be lower case letters between 3 and 20 characters.
+
+  VPC:
+    Type: AWS::EC2::VPC::Id
+
+  LogGroupName:
+    Type: String
+    Description: LogGroup name to use for the service
+
+  ClusterArn:
+    Type: String
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+
+  Image:
+    Type: String
+
+  DbAdminSecretArn:
+    Type: String
+
+  CustomResourcesServiceToken:
+    Type: String
+    Description: ARN of the Lambda that creates the application database
+
+  DesiredCount:
+    Type: Number
+    Default: 1
+
+  ContainerPort:
+    Type: Number
+    Default: 80
+
+  AppName:
+    Type: String
+    Default: "transactions"
+
+  LoadBalancerSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: "Security group ID of the RVPay load balancer."
+
+  LoadBalancerListenerArn:
+    Type: String
+    Description: "ARN of the HTTPS listener for the RVPay load balancer."
+
+  DomainName:
+    Type: String
+
+Resources:
+  AppDatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "/${EnvId}/${AppName}_database"
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${AppName}", "dbname": "${AppName}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 30
+        ExcludePunctuation: true
+      Tags:
+        - Key: EnvId
+          Value: !Ref EnvId
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${EnvId}-${AppName}"
+      NetworkMode: bridge
+      RequiresCompatibilities:
+        - EC2
+      Memory: 84
+      ExecutionRoleArn: !Ref ExecutionRole
+      TaskRoleArn: !Ref TaskRole
+
+      ContainerDefinitions:
+        - Name: App
+          Image: !Ref Image
+
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+              Name: grpc
+
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroupName
+              awslogs-stream-prefix: !Ref AppName
+
+          Environment:
+            - Name: LISTEN_PORT
+              Value: !Ref ContainerPort
+
+            - Name: MIGRATION_PATH
+              Value: "/app/migrations"
+
+            - Name: RUN_MIGRATIONS
+              Value: "true"
+
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+
+          Secrets:
+            - Name: DB_NAME
+              ValueFrom: !Sub "${AppDatabaseSecret}:dbname::"
+
+            - Name: DB_USER
+              ValueFrom: !Sub "${AppDatabaseSecret}:username::"
+
+            - Name: DB_HOST
+              ValueFrom: !Sub "${DbAdminSecretArn}:host::"
+
+            - Name: DB_PORT
+              ValueFrom: !Sub "${DbAdminSecretArn}:port::"
+
+            - Name: DB_PASSWORD
+              ValueFrom: !Sub "${AppDatabaseSecret}:password::"
+
+  AppDatabase:
+    Type: Custom::PgDatabase
+    Properties:
+      ServiceToken: !Ref CustomResourcesServiceToken
+      StackName: !Ref AWS::StackName
+      ServiceTimeout: 120
+      AdminSecretArn: !Ref DbAdminSecretArn
+      ServiceSecretArn: !Ref AppDatabaseSecret
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-EcsExecutionRole"
+
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: "sts:AssumeRole"
+
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+
+      Policies:
+        - PolicyName: secrets-access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "secretsmanager:GetResourcePolicy"
+                  - "secretsmanager:GetSecretValue"
+                  - "secretsmanager:DescribeSecret"
+                  - "secretsmanager:ListSecretVersionIds"
+                  - "secretsmanager:ListSecrets"
+                Resource:
+                  - !Ref AppDatabaseSecret
+                  - !Ref DbAdminSecretArn
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvId}-${AppName}-TaskRole"
+
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: []
+                Resource: "*"
+
+  EcsService:
+    Type: AWS::ECS::Service
+
+    Properties:
+      ServiceName: !Sub "${EnvId}-${AppName}"
+      Cluster: !Ref ClusterArn
+      TaskDefinition: !Ref TaskDefinition
+
+      LoadBalancers:
+        - ContainerName: App
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref TransactionsTargetGroup
+
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+
+      DesiredCount: !Ref DesiredCount
+      LaunchType: EC2
+
+      ServiceConnectConfiguration:
+        Enabled: true
+        Namespace: !Sub "${EnvId}"
+
+        Services:
+          - PortName: grpc
+            DiscoveryName: !Sub "${EnvId}-${AppName}-grpc"
+
+            ClientAliases:
+              - DnsName: !Ref AppName
+                Port: !Ref ContainerPort
+
+  TransactionsTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${EnvId}-transactions"
+      Port: !Ref ContainerPort
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: traffic-port
+      HealthCheckPath: /healthz
+      Matcher:
+        HttpCode: "200"
+
+  TransactionsListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref LoadBalancerListenerArn
+      Priority: 20
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values:
+              - !Sub "transactions.${DomainName}"
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref TransactionsTargetGroup
+
+Outputs:
+  ServiceName:
+    Description: ECS service name
+    Value: !Ref EcsService
+
+  ServiceArn:
+    Description: ECS service ARN
+    Value: !Ref EcsService
+
+  DatabaseSecretArn:
+    Description: Application database secret ARN
+    Value: !Ref AppDatabaseSecret
